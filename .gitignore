@@ -1,0 +1,16 @@
+# Standalone Node virtual environment
+.venv/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Logs & caches
+*.log
+npm-debug.log*
+.npm-cache/
+.DS_Store
