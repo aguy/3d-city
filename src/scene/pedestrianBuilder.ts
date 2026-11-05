@@ -54,13 +54,17 @@ export function createPedestrianFigure(strideAngle = 0.28): THREE.Group {
   return person;
 }
 
-export function buildPedestriansScene(): {
+export function buildPedestriansScene(density = 1.0): {
   group: THREE.Group;
   animatedPedestrians: AnimatedPedestrian[];
 } {
   const group = new THREE.Group();
   group.name = 'SidewalkPedestrians';
   const animatedPedestrians: AnimatedPedestrian[] = [];
+
+  if (density <= 0) {
+    return { group, animatedPedestrians };
+  }
 
   let seed = 43;
   const nextRand = () => {
@@ -71,6 +75,10 @@ export function buildPedestriansScene(): {
   // 1. Sidewalk pedestrians along both sides of the street canyon
   for (let z = 148; z >= -210; z -= 9.5) {
     for (const side of [-1, 1] as const) {
+      if (density < 1.0 && nextRand() > density) {
+        continue;
+      }
+
       const r1 = nextRand();
       const r2 = nextRand();
       const x = side * (9.5 + r1 * 2.1);
@@ -95,14 +103,17 @@ export function buildPedestriansScene(): {
   }
 
   // 2. Pedestrians crossing at zebra crosswalks
-  const crosswalksZ = [105, 35, -35, -105];
-  for (const iz of crosswalksZ) {
-    const cwZ = iz + 7.2;
-    for (const xPos of [-5.2, -3.4, 1.4, 4.1]) {
-      const ped = createPedestrianFigure(0.32);
-      ped.position.set(xPos, 0.02, cwZ + (xPos > 0 ? 0.45 : -0.45));
-      ped.rotation.y = xPos > 0 ? -Math.PI / 2 : Math.PI / 2;
-      group.add(ped);
+  if (density >= 0.5) {
+    const crosswalksZ = [105, 35, -35, -105];
+    for (const iz of crosswalksZ) {
+      const cwZ = iz + 7.2;
+      for (const xPos of [-5.2, -3.4, 1.4, 4.1]) {
+        if (density < 1.0 && nextRand() > density) continue;
+        const ped = createPedestrianFigure(0.32);
+        ped.position.set(xPos, 0.02, cwZ + (xPos > 0 ? 0.45 : -0.45));
+        ped.rotation.y = xPos > 0 ? -Math.PI / 2 : Math.PI / 2;
+        group.add(ped);
+      }
     }
   }
 

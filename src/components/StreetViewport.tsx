@@ -136,9 +136,12 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     let currentDescriptor = sceneDescriptorRef.current;
     let roadGroup = buildRoadScene(currentDescriptor);
     let buildingsGroup = buildBuildingsScene(currentDescriptor);
-    const { group: vehiclesGroup, animatedVehicles } = buildVehiclesScene();
-    const { group: pedestriansGroup, animatedPedestrians } =
-      buildPedestriansScene();
+    let vScene = buildVehiclesScene(currentDescriptor?.propDensity?.vehicles ?? 0.7);
+    let vehiclesGroup = vScene.group;
+    let animatedVehicles = vScene.animatedVehicles;
+    let pScene = buildPedestriansScene(currentDescriptor?.propDensity?.pedestrians ?? 0.8);
+    let pedestriansGroup = pScene.group;
+    let animatedPedestrians = pScene.animatedPedestrians;
     const targetReticle = createTargetReticle();
     const transitionVisualizerGroup = createTransitionVisualizerGroup();
 
@@ -207,17 +210,29 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       const currentToParams = toParamsRef.current;
       const currentProgressT = progressTRef.current;
 
-      // Check if SceneDescriptor changed to dynamically rebuild ground & buildings
+      // Check if SceneDescriptor changed to dynamically rebuild ground, buildings, vehicles & pedestrians
       if (sceneDescriptorRef.current !== currentDescriptor) {
         currentDescriptor = sceneDescriptorRef.current;
         scene.remove(roadGroup);
         scene.remove(buildingsGroup);
+        scene.remove(vehiclesGroup);
+        scene.remove(pedestriansGroup);
 
         roadGroup = buildRoadScene(currentDescriptor);
         buildingsGroup = buildBuildingsScene(currentDescriptor);
 
+        vScene = buildVehiclesScene(currentDescriptor?.propDensity?.vehicles ?? 0.7);
+        vehiclesGroup = vScene.group;
+        animatedVehicles = vScene.animatedVehicles;
+
+        pScene = buildPedestriansScene(currentDescriptor?.propDensity?.pedestrians ?? 0.8);
+        pedestriansGroup = pScene.group;
+        animatedPedestrians = pScene.animatedPedestrians;
+
         scene.add(roadGroup);
         scene.add(buildingsGroup);
+        scene.add(vehiclesGroup);
+        scene.add(pedestriansGroup);
 
         applyRenderModeToScene(scene, currentParams.renderMode);
         applyBuildingDetailLevel(buildingsGroup, {

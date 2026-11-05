@@ -61,12 +61,87 @@ export async function checkChromeAIAvailable(): Promise<boolean> {
 export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescriptor {
   const text = promptText.toLowerCase();
 
+  // 0. Negation & Absence Detection
+  const wantsNoBuildings =
+    text.includes('no building') ||
+    text.includes('no buildings') ||
+    text.includes('without building') ||
+    text.includes('without buildings') ||
+    text.includes('zero building') ||
+    text.includes('zero buildings') ||
+    text.includes('blank street') ||
+    text.includes('blank road') ||
+    text.includes('blank scene') ||
+    text.includes('empty street') ||
+    text.includes('empty road') ||
+    text.includes('open road') ||
+    text.includes('open highway') ||
+    text.includes('no houses') ||
+    text.includes('no house') ||
+    text.includes('no architecture') ||
+    text.includes('no structures');
+
+  const wantsSparseBuildings =
+    !wantsNoBuildings &&
+    (text.includes('sparse') ||
+      text.includes('scattered') ||
+      text.includes('few buildings') ||
+      text.includes('suburban') ||
+      text.includes('semi-rural'));
+
+  const wantsNoVehicles =
+    text.includes('no car') ||
+    text.includes('no cars') ||
+    text.includes('no vehicle') ||
+    text.includes('no vehicles') ||
+    text.includes('no traffic') ||
+    text.includes('empty road') ||
+    text.includes('empty street') ||
+    text.includes('blank street') ||
+    text.includes('blank road') ||
+    text.includes('deserted') ||
+    text.includes('abandoned') ||
+    text.includes('pedestrian only');
+
+  const wantsNoPedestrians =
+    text.includes('no people') ||
+    text.includes('no pedestrian') ||
+    text.includes('no pedestrians') ||
+    text.includes('empty street') ||
+    text.includes('empty road') ||
+    text.includes('blank street') ||
+    text.includes('deserted') ||
+    text.includes('abandoned') ||
+    text.includes('ghost town');
+
+  const wantsNoTrees =
+    text.includes('no tree') ||
+    text.includes('no trees') ||
+    text.includes('treeless') ||
+    text.includes('blank street') ||
+    text.includes('blank road') ||
+    text.includes('desert') ||
+    text.includes('arid');
+
+  const wantsNoLamps =
+    text.includes('no lamp') ||
+    text.includes('no lamps') ||
+    text.includes('no pole') ||
+    text.includes('no poles') ||
+    text.includes('no street light') ||
+    text.includes('blank street') ||
+    text.includes('blank road');
+
   // 1. Archetype and ground detection
-  let archetype: SceneArchetype = 'canyon';
+  let archetype: SceneArchetype = wantsNoBuildings ? 'open-road' : 'canyon';
   let groundType: GroundType = 'standard-road';
   let buildingStyle: BuildingStyle = 'modern-canyon';
 
-  if (text.includes('canal') || text.includes('venice') || text.includes('water') || text.includes('river')) {
+  if (wantsNoBuildings) {
+    archetype = 'open-road';
+    groundType = 'standard-road';
+    buildingStyle = 'modern-canyon';
+  } else if (text.includes('canal') || text.includes('venice') || text.includes('water') || text.includes('river')) {
     archetype = 'canal';
     groundType = 'canal-water';
     buildingStyle = 'haussmann';
@@ -103,7 +178,10 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
   // 2. Verticality and building heights
   let minH = 25;
   let maxH = 75;
-  if (text.includes('skyscraper') || text.includes('tower') || text.includes('tall') || text.includes('metropolis') || archetype === 'cyberpunk' || archetype === 'canyon') {
+  if (wantsNoBuildings) {
+    minH = 0;
+    maxH = 0;
+  } else if (text.includes('skyscraper') || text.includes('tower') || text.includes('tall') || text.includes('metropolis') || archetype === 'cyberpunk' || archetype === 'canyon') {
     minH = 45;
     maxH = 110;
   } else if (text.includes('low') || text.includes('village') || text.includes('intimate') || archetype === 'tokyo-alley' || archetype === 'amsterdam') {
@@ -117,7 +195,10 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
   // 3. Street and sidewalk widths
   let streetWidth = 18;
   let sidewalkWidth = 4.5;
-  if (archetype === 'tokyo-alley') {
+  if (archetype === 'open-road') {
+    streetWidth = 20;
+    sidewalkWidth = wantsNoBuildings ? 2.5 : 4.5;
+  } else if (archetype === 'tokyo-alley') {
     streetWidth = 6.5;
     sidewalkWidth = 1.8;
   } else if (archetype === 'boulevard') {
@@ -132,13 +213,18 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
   }
 
   // 4. Props & feature flags
-  const hasCanalBridges = archetype === 'canal' || archetype === 'amsterdam';
-  const hasSkybridges = archetype === 'cyberpunk' || text.includes('skybridge') || text.includes('bridge');
-  const hasMonorailTrack = archetype === 'monorail' || text.includes('monorail') || text.includes('train');
-  const hasTrees = archetype === 'boulevard' || archetype === 'amsterdam' || text.includes('tree');
-  const hasStreetAwnings = archetype === 'tokyo-alley' || buildingStyle === 'haussmann' || text.includes('awning');
-  const hasAntennaSpires = archetype === 'cyberpunk' || archetype === 'canyon' || text.includes('antenna');
-  const hasCranes = archetype === 'construction' || text.includes('crane');
+  const hasBuildings = !wantsNoBuildings;
+  const buildingDensity = wantsNoBuildings ? 0 : wantsSparseBuildings ? 0.35 : 1.0;
+  const hasLandmarkTower = !wantsNoBuildings && !text.includes('no landmark') && !text.includes('no tower');
+  const hasSkylineTowers = !wantsNoBuildings && !text.includes('no skyline') && !wantsSparseBuildings;
+
+  const hasCanalBridges = !wantsNoBuildings && (archetype === 'canal' || archetype === 'amsterdam');
+  const hasSkybridges = !wantsNoBuildings && (archetype === 'cyberpunk' || text.includes('skybridge') || text.includes('bridge'));
+  const hasMonorailTrack = !wantsNoBuildings && (archetype === 'monorail' || text.includes('monorail') || text.includes('train'));
+  const hasTrees = !wantsNoTrees && (archetype === 'boulevard' || archetype === 'amsterdam' || text.includes('tree'));
+  const hasStreetAwnings = !wantsNoBuildings && (archetype === 'tokyo-alley' || buildingStyle === 'haussmann' || text.includes('awning'));
+  const hasAntennaSpires = !wantsNoBuildings && (archetype === 'cyberpunk' || archetype === 'canyon' || text.includes('antenna'));
+  const hasCranes = !wantsNoBuildings && (archetype === 'construction' || text.includes('crane'));
 
   // 5. Aesthetic Paper Theme and Stylings
   let paperTheme: 'cream' | 'blueprint' | 'terminal' | 'vellum' = 'cream';
@@ -182,7 +268,15 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
   let fov = 42;
   let lookAhead = 85;
 
-  if (archetype === 'tokyo-alley') {
+  if (archetype === 'open-road') {
+    camHeight = 4.2;
+    camAlong = 14;
+    camSide = -12;
+    pitch = 5;
+    turn = 0;
+    fov = 52;
+    lookAhead = 150;
+  } else if (archetype === 'tokyo-alley') {
     camHeight = 2.4; // Eye-level pedestrian in narrow alley
     camAlong = 18;
     camSide = -10;
@@ -219,9 +313,15 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
   return {
     archetype,
     name: promptText ? promptText.slice(0, 40) : 'Procedural City Canyon',
-    description: `Generated ${archetype} wireframe environment (${buildingStyle} architecture, ${groundType}).`,
+    description: wantsNoBuildings
+      ? `Generated open ${archetype} wireframe with no buildings (${groundType}).`
+      : `Generated ${archetype} wireframe environment (${buildingStyle} architecture, ${groundType}).`,
     groundType,
     buildingStyle,
+    hasBuildings,
+    buildingDensity,
+    hasLandmarkTower,
+    hasSkylineTowers,
     buildingHeights: {
       min: minH,
       max: maxH,
@@ -237,11 +337,11 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
     hasAntennaSpires,
     hasCranes,
     propDensity: {
-      trees: hasTrees ? 0.8 : 0.1,
-      lamps: 0.7,
-      vehicles: archetype === 'canal' || archetype === 'tokyo-alley' ? 0.1 : 0.7,
-      pedestrians: 0.8,
-      overheads: hasSkybridges || hasMonorailTrack || hasCanalBridges ? 0.8 : 0.2,
+      trees: wantsNoTrees ? 0 : hasTrees ? 0.8 : 0.1,
+      lamps: wantsNoLamps ? 0 : 0.7,
+      vehicles: wantsNoVehicles ? 0 : archetype === 'canal' || archetype === 'tokyo-alley' ? 0.1 : 0.7,
+      pedestrians: wantsNoPedestrians ? 0 : 0.8,
+      overheads: wantsNoBuildings ? 0 : hasSkybridges || hasMonorailTrack || hasCanalBridges ? 0.8 : 0.2,
     },
     recommendedStyle: {
       paperTheme,
@@ -251,9 +351,9 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
       hatchDensity,
       stippleShade,
       cornerOvershoot,
-      windowDensity: 80,
-      balconyDensity: buildingStyle === 'haussmann' ? 85 : 55,
-      buildingDetail: 80,
+      windowDensity: wantsNoBuildings ? 0 : 80,
+      balconyDensity: wantsNoBuildings ? 0 : buildingStyle === 'haussmann' ? 85 : 55,
+      buildingDetail: wantsNoBuildings ? 0 : 80,
     },
     recommendedCamera: {
       cameraHeight: camHeight,
@@ -282,11 +382,15 @@ export async function generateSceneFromPrompt(promptText: string): Promise<{
       const session = await window.ai.languageModel.create({
         systemPrompt: `You are an architectural 3D urban scene generator. Given a user description, output a JSON object matching this schema:
 {
-  "archetype": "canyon" | "boulevard" | "canal" | "monorail" | "tokyo-alley" | "brutalist" | "gothic-historic" | "cyberpunk" | "amsterdam" | "construction",
+  "archetype": "canyon" | "boulevard" | "canal" | "monorail" | "tokyo-alley" | "brutalist" | "gothic-historic" | "cyberpunk" | "amsterdam" | "construction" | "open-road" | "minimalist",
   "name": "short scene title",
   "description": "brief description",
   "groundType": "standard-road" | "canal-water" | "boulevard" | "cobblestone-alley" | "monorail-highway",
   "buildingStyle": "modern-canyon" | "haussmann" | "brutalist" | "neo-tokyo" | "sci-fi-spires" | "gothic-historic" | "amsterdam-gabled" | "scaffold-frame",
+  "hasBuildings": boolean,
+  "buildingDensity": number (0.0 to 1.0),
+  "hasLandmarkTower": boolean,
+  "hasSkylineTowers": boolean,
   "buildingHeights": { "min": number, "max": number, "variance": number },
   "streetWidth": number (6 to 30),
   "sidewalkWidth": number (1.5 to 8),
@@ -297,6 +401,13 @@ export async function generateSceneFromPrompt(promptText: string): Promise<{
   "hasStreetAwnings": boolean,
   "hasAntennaSpires": boolean,
   "hasCranes": boolean,
+  "propDensity": {
+    "trees": number (0 to 1),
+    "lamps": number (0 to 1),
+    "vehicles": number (0 to 1),
+    "pedestrians": number (0 to 1),
+    "overheads": number (0 to 1)
+  },
   "recommendedStyle": {
     "paperTheme": "cream" | "blueprint" | "terminal" | "vellum",
     "renderMode": "edges-occluded",
@@ -319,7 +430,10 @@ export async function generateSceneFromPrompt(promptText: string): Promise<{
     "cameraSide": number (-80 to 80)
   }
 }
-Output ONLY valid JSON, with no markdown code fence or extra text.`,
+CRITICAL INSTRUCTIONS:
+- If the user specifies "no buildings", "without buildings", "blank street", "empty road", or requests an empty open scene, you MUST set hasBuildings to false, buildingDensity to 0, hasLandmarkTower to false, hasSkylineTowers to false, and min/max heights to 0.
+- If the user specifies "no cars", "no traffic", or "empty", set vehicles to 0 in propDensity.
+- Output ONLY valid JSON, with no markdown code fence or extra text.`,
       });
 
       const rawResponse = await session.prompt(promptText);
@@ -338,9 +452,19 @@ Output ONLY valid JSON, with no markdown code fence or extra text.`,
       const descriptor: SceneDescriptor = {
         ...fallback,
         ...parsed,
+        hasBuildings: typeof parsed.hasBuildings === 'boolean' ? parsed.hasBuildings : fallback.hasBuildings,
+        buildingDensity: typeof parsed.buildingDensity === 'number' ? parsed.buildingDensity : fallback.buildingDensity,
+        hasLandmarkTower: typeof parsed.hasLandmarkTower === 'boolean' ? parsed.hasLandmarkTower : fallback.hasLandmarkTower,
+        hasSkylineTowers: typeof parsed.hasSkylineTowers === 'boolean' ? parsed.hasSkylineTowers : fallback.hasSkylineTowers,
+        hasTrees: typeof parsed.hasTrees === 'boolean' ? parsed.hasTrees : fallback.hasTrees,
+        hasSkybridges: typeof parsed.hasSkybridges === 'boolean' ? parsed.hasSkybridges : fallback.hasSkybridges,
         buildingHeights: {
           ...fallback.buildingHeights,
           ...(parsed.buildingHeights || {}),
+        },
+        propDensity: {
+          ...fallback.propDensity,
+          ...(parsed.propDensity || {}),
         },
         recommendedStyle: {
           ...fallback.recommendedStyle,

@@ -7,6 +7,8 @@ import {
 import { PROMPT_SUGGESTIONS } from '../../types/scenePromptTypes';
 import { buildRoadScene } from '../roadBuilder';
 import { buildBuildingsScene } from '../buildingBuilder';
+import { buildVehiclesScene } from '../vehicleBuilder';
+import { buildPedestriansScene } from '../pedestrianBuilder';
 
 describe('Prompt Scene Generator & Synthesizer', () => {
   it('hashes strings deterministically', () => {
@@ -60,6 +62,32 @@ describe('Prompt Scene Generator & Synthesizer', () => {
     expect(desc.groundType).toBe('monorail-highway');
     expect(desc.hasMonorailTrack).toBe(true);
     expect(desc.recommendedStyle.paperTheme).toBe('blueprint');
+  });
+
+  it('correctly parses negative prompts like "blank street with no buildings"', () => {
+    const desc = synthesizeSceneFromPromptOffline('blank street with no buildings');
+    expect(desc.hasBuildings).toBe(false);
+    expect(desc.buildingDensity).toBe(0);
+    expect(desc.archetype).toBe('open-road');
+    expect(desc.buildingHeights.min).toBe(0);
+    expect(desc.buildingHeights.max).toBe(0);
+    expect(desc.hasLandmarkTower).toBe(false);
+    expect(desc.hasSkylineTowers).toBe(false);
+    expect(desc.propDensity.vehicles).toBe(0);
+    expect(desc.propDensity.pedestrians).toBe(0);
+
+    // Verify Three.js scene outputs
+    const buildings = buildBuildingsScene(desc);
+    expect(buildings.children.length).toBe(0); // Absolutely no buildings generated!
+
+    const road = buildRoadScene(desc);
+    expect(road.children.length).toBeGreaterThan(0); // Road is still rendered
+
+    const vehicles = buildVehiclesScene(desc.propDensity.vehicles);
+    expect(vehicles.group.children.length).toBe(0); // No vehicles on blank street
+
+    const pedestrians = buildPedestriansScene(desc.propDensity.pedestrians);
+    expect(pedestrians.group.children.length).toBe(0); // No pedestrians on blank street
   });
 
   it('generates scene specs for all preset prompt suggestions without errors', async () => {

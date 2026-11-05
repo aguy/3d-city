@@ -10,7 +10,9 @@ export type SceneArchetype =
   | 'gothic-historic'
   | 'cyberpunk'
   | 'amsterdam'
-  | 'construction';
+  | 'construction'
+  | 'open-road'
+  | 'minimalist';
 
 export type GroundType =
   | 'standard-road'
@@ -42,6 +44,10 @@ export interface SceneDescriptor {
   };
   streetWidth: number; // primary width (road or canal)
   sidewalkWidth: number;
+  hasBuildings?: boolean;
+  buildingDensity?: number; // 0..1
+  hasLandmarkTower?: boolean;
+  hasSkylineTowers?: boolean;
   hasCanalBridges?: boolean;
   hasSkybridges?: boolean;
   hasMonorailTrack?: boolean;
@@ -134,5 +140,12 @@ export const PROMPT_SUGGESTIONS: PromptSuggestion[] = [
     label: 'Metropolis Skeletons',
     prompt:
       'Towering steel frame skyscraper skeletons with climbing crane jibs and industrial scaffolds',
+  },
+  {
+    id: 'open-road',
+    emoji: '🛣️',
+    label: 'Blank Open Highway',
+    prompt:
+      'Blank open street with no buildings, clean empty pavement, and clear open horizon',
   },
 ];

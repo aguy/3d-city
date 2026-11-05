@@ -150,13 +150,17 @@ export function createBusModel(): THREE.Group {
   return bus;
 }
 
-export function buildVehiclesScene(): {
+export function buildVehiclesScene(density = 1.0): {
   group: THREE.Group;
   animatedVehicles: AnimatedVehicle[];
 } {
   const group = new THREE.Group();
   group.name = 'StreetVehicles';
   const animatedVehicles: AnimatedVehicle[] = [];
+
+  if (density <= 0) {
+    return { group, animatedVehicles };
+  }
 
   // 4 lanes:
   // X = -5.8 (outer southbound, facing +Z)
@@ -193,7 +197,13 @@ export function buildVehiclesScene(): {
     { laneX: -2.0, z: -192, dir: 1, type: 'bus', speed: 8.5 },
   ];
 
+  let vehicleIdx = 0;
   for (const p of placements) {
+    vehicleIdx++;
+    if (density < 1.0 && (vehicleIdx % 10) / 10 >= density) {
+      continue;
+    }
+
     const model =
       p.type === 'truck'
         ? createTruckModel()

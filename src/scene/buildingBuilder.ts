@@ -861,6 +861,11 @@ export function buildBuildingsScene(descriptor?: SceneDescriptor): THREE.Group {
   const group = new THREE.Group();
   group.name = 'UrbanStreetWalls';
 
+  // If user explicitly requested no buildings or buildingDensity is 0, return empty group!
+  if (descriptor?.hasBuildings === false || descriptor?.buildingDensity === 0) {
+    return group;
+  }
+
   // Street canyon spans Z from +165 to -245, interrupted by cross-streets at [105, 35, -35, -105, -175]
   const blocks: Array<{ zStart: number; zEnd: number }> = [
     { zStart: 164, zEnd: 112 },
@@ -889,6 +894,7 @@ export function buildBuildingsScene(descriptor?: SceneDescriptor): THREE.Group {
   const minH = descriptor?.buildingHeights.min ?? 20;
   const maxH = descriptor?.buildingHeights.max ?? 75;
   const hRange = Math.max(8, maxH - minH);
+  const density = descriptor?.buildingDensity ?? 1.0;
 
   blocks.forEach((block, blockIdx) => {
     for (const side of [-1, 1] as const) {
@@ -902,6 +908,11 @@ export function buildBuildingsScene(descriptor?: SceneDescriptor): THREE.Group {
         const widthZ = lotZ - 0.5;
         const zCenter = cursorZ - lotZ / 2;
         cursorZ -= lotZ;
+
+        // Sparse building support: randomly skip lots if density < 1
+        if (density < 1.0 && nextRand() > density) {
+          return;
+        }
 
         const r1 = nextRand();
         const r2 = nextRand();
@@ -930,24 +941,26 @@ export function buildBuildingsScene(descriptor?: SceneDescriptor): THREE.Group {
       });
 
       // Second row of taller skyline towers behind the street wall
-      const backMidZ = (block.zStart + block.zEnd) / 2;
-      const backHeight = minH * 1.4 + nextRand() * hRange * 1.2;
-      buildingCounter++;
-      group.add(
-        createBuildingFromSpec(
-          {
-            side,
-            zCenter: backMidZ + (side === 1 ? 6 : -6),
-            widthZ: totalBlockZ * 0.55,
-            depthX: 18,
-            height: backHeight,
-            style: blockIdx % 2 === 0 ? 'setback-tower' : 'brutalist-slab',
-            row: 2,
-            seedOffset: buildingCounter,
-          },
-          descriptor
-        )
-      );
+      if (descriptor?.hasSkylineTowers !== false && (density >= 0.7 || nextRand() < density)) {
+        const backMidZ = (block.zStart + block.zEnd) / 2;
+        const backHeight = minH * 1.4 + nextRand() * hRange * 1.2;
+        buildingCounter++;
+        group.add(
+          createBuildingFromSpec(
+            {
+              side,
+              zCenter: backMidZ + (side === 1 ? 6 : -6),
+              widthZ: totalBlockZ * 0.55,
+              depthX: 18,
+              height: backHeight,
+              style: blockIdx % 2 === 0 ? 'setback-tower' : 'brutalist-slab',
+              row: 2,
+              seedOffset: buildingCounter,
+            },
+            descriptor
+          )
+        );
+      }
     }
   });
 
@@ -974,25 +987,27 @@ export function buildBuildingsScene(descriptor?: SceneDescriptor): THREE.Group {
   }
 
   // Distant focal landmark tower on the far horizon axis (Z = -278m)
-  const landmarkGroup = new THREE.Group();
-  const baseGeo = new THREE.BoxGeometry(22, 68, 22);
-  baseGeo.translate(0, 34, -278);
-  landmarkGroup.add(createPlotterMesh(baseGeo));
+  if (descriptor?.hasLandmarkTower !== false) {
+    const landmarkGroup = new THREE.Group();
+    const baseGeo = new THREE.BoxGeometry(22, 68, 22);
+    baseGeo.translate(0, 34, -278);
+    landmarkGroup.add(createPlotterMesh(baseGeo));
 
-  const midGeo = new THREE.BoxGeometry(15, 36, 15);
-  midGeo.translate(0, 86, -278);
-  landmarkGroup.add(createPlotterMesh(midGeo));
+    const midGeo = new THREE.BoxGeometry(15, 36, 15);
+    midGeo.translate(0, 86, -278);
+    landmarkGroup.add(createPlotterMesh(midGeo));
 
-  const topGeo = new THREE.BoxGeometry(9, 22, 9);
-  topGeo.translate(0, 115, -278);
-  landmarkGroup.add(createPlotterMesh(topGeo));
+    const topGeo = new THREE.BoxGeometry(9, 22, 9);
+    topGeo.translate(0, 115, -278);
+    landmarkGroup.add(createPlotterMesh(topGeo));
 
-  const spireGeo = new THREE.ConeGeometry(2.8, 24, 4);
-  spireGeo.rotateY(Math.PI / 4);
-  spireGeo.translate(0, 138, -278);
-  landmarkGroup.add(createPlotterMesh(spireGeo));
+    const spireGeo = new THREE.ConeGeometry(2.8, 24, 4);
+    spireGeo.rotateY(Math.PI / 4);
+    spireGeo.translate(0, 138, -278);
+    landmarkGroup.add(createPlotterMesh(spireGeo));
 
-  group.add(landmarkGroup);
+    group.add(landmarkGroup);
+  }
 
   return group;
 }

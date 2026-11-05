@@ -198,16 +198,26 @@ export function buildRoadScene(descriptor?: SceneDescriptor): THREE.Group {
   }
 
   // 3. Street Furniture (Lamps, Trees)
-  const lampDist = halfStreetW + 0.6;
-  const lampStep = isNarrowAlley ? 16 : isBoulevard ? 20 : 28;
-  for (let z = Z_START - 10; z > Z_END + 10; z -= lampStep) {
-    const inIntersection = INTERSECTION_Z.some((iz) => Math.abs(z - iz) < 8);
-    if (inIntersection && !isCanal) continue;
-    roadGroup.add(createStreetLamp(-1, z, lampDist));
-    roadGroup.add(createStreetLamp(1, z, lampDist));
+  const allowLamps = (descriptor?.propDensity?.lamps ?? 1.0) > 0;
+  if (allowLamps) {
+    const lampDist = halfStreetW + 0.6;
+    const lampStep = isNarrowAlley ? 16 : isBoulevard ? 20 : 28;
+    for (let z = Z_START - 10; z > Z_END + 10; z -= lampStep) {
+      const inIntersection = INTERSECTION_Z.some((iz) => Math.abs(z - iz) < 8);
+      if (inIntersection && !isCanal) continue;
+      roadGroup.add(createStreetLamp(-1, z, lampDist));
+      roadGroup.add(createStreetLamp(1, z, lampDist));
+    }
   }
 
-  if (descriptor?.hasTrees || isBoulevard || (!isCanal && !isNarrowAlley)) {
+  const allowTrees =
+    descriptor?.hasTrees !== false &&
+    (descriptor?.propDensity?.trees ?? 1.0) > 0 &&
+    (descriptor?.hasTrees === true ||
+      isBoulevard ||
+      (!isCanal && !isNarrowAlley && descriptor?.archetype !== 'open-road'));
+
+  if (allowTrees) {
     const treeDist = halfStreetW + sidewalkW - 1.2;
     for (let z = Z_START - 18; z > Z_END + 14; z -= isBoulevard ? 18 : 28) {
       const inIntersection = INTERSECTION_Z.some((iz) => Math.abs(z - iz) < 9);
