@@ -29,13 +29,25 @@ function createStreetLamp(side: -1 | 1, z: number, offsetDist = 8.4): THREE.Grou
   headGeo.translate(poleX - side * armLength, 6.42, z);
   lamp.add(createPlotterMesh(headGeo, { inkWeight: 'primary' }));
 
-  // Diagonal support strut (micro-detail)
+  // Diagonal support strut & lantern cage (micro-detail)
   const strutLines: THREE.Vector3[] = [
-    new THREE.Vector3(poleX, 5.2, z),
-    new THREE.Vector3(poleX - side * 1.2, 6.42, z),
+    new THREE.Vector3(poleX, 5.1, z),
+    new THREE.Vector3(poleX - side * 1.35, 6.44, z),
+    new THREE.Vector3(poleX, 5.5, z),
+    new THREE.Vector3(poleX - side * 0.9, 6.44, z),
+    // Lantern drop cage
+    new THREE.Vector3(poleX - side * armLength - 0.22, 6.34, z - 0.12),
+    new THREE.Vector3(poleX - side * armLength, 6.02, z),
+    new THREE.Vector3(poleX - side * armLength + 0.22, 6.34, z - 0.12),
+    new THREE.Vector3(poleX - side * armLength, 6.02, z),
+    new THREE.Vector3(poleX - side * armLength - 0.22, 6.34, z + 0.12),
+    new THREE.Vector3(poleX - side * armLength, 6.02, z),
+    new THREE.Vector3(poleX - side * armLength + 0.22, 6.34, z + 0.12),
+    new THREE.Vector3(poleX - side * armLength, 6.02, z),
   ];
   const strutSegs = createPlotterSegments(strutLines, 'secondary');
   strutSegs.userData.pointsThreshold = 30;
+  strutSegs.userData.alwaysVisibleInSobel = true;
   lamp.add(strutSegs);
 
   return lamp;
@@ -55,6 +67,37 @@ function createStreetTree(x: number, z: number, scale = 1.0): THREE.Group {
   const foliageGeo2 = new THREE.IcosahedronGeometry(1.2 * scale, 0);
   foliageGeo2.translate(x, 5.2 * scale, z);
   tree.add(createPlotterMesh(foliageGeo2, { inkWeight: 'secondary' }));
+
+  // Tree pit sidewalk grate & inner branch arbor (micro-detail)
+  const grateR = 0.85 * scale;
+  const wy = 0.245;
+  const treeDetailLines: THREE.Vector3[] = [
+    new THREE.Vector3(x - grateR, wy, z - grateR),
+    new THREE.Vector3(x + grateR, wy, z - grateR),
+    new THREE.Vector3(x + grateR, wy, z - grateR),
+    new THREE.Vector3(x + grateR, wy, z + grateR),
+    new THREE.Vector3(x + grateR, wy, z + grateR),
+    new THREE.Vector3(x - grateR, wy, z + grateR),
+    new THREE.Vector3(x - grateR, wy, z + grateR),
+    new THREE.Vector3(x - grateR, wy, z - grateR),
+    new THREE.Vector3(x - grateR, wy, z),
+    new THREE.Vector3(x + grateR, wy, z),
+    new THREE.Vector3(x, wy, z - grateR),
+    new THREE.Vector3(x, wy, z + grateR),
+    // Inner branches radiating into canopy
+    new THREE.Vector3(x, 2.2 * scale, z),
+    new THREE.Vector3(x - 1.1 * scale, 3.9 * scale, z - 0.8 * scale),
+    new THREE.Vector3(x, 2.2 * scale, z),
+    new THREE.Vector3(x + 1.1 * scale, 3.9 * scale, z + 0.8 * scale),
+    new THREE.Vector3(x, 2.4 * scale, z),
+    new THREE.Vector3(x + 0.9 * scale, 4.2 * scale, z - 0.9 * scale),
+    new THREE.Vector3(x, 2.4 * scale, z),
+    new THREE.Vector3(x - 0.9 * scale, 4.2 * scale, z + 0.9 * scale),
+  ];
+  const treeDetailSegs = createPlotterSegments(treeDetailLines, 'secondary');
+  treeDetailSegs.userData.pointsThreshold = 35;
+  treeDetailSegs.userData.alwaysVisibleInSobel = true;
+  tree.add(treeDetailSegs);
 
   return tree;
 }
@@ -200,99 +243,187 @@ export function buildRoadScene(descriptor?: SceneDescriptor): THREE.Group {
       roadGroup.add(createPlotterSegments(primaryMarkings, 'primary'));
     }
 
-    // Micro-detail: Sidewalk flagstone paving cuts
+    // Micro-detail: Sidewalk flagstone paving cuts & curb block joints
     const flagstoneLines: THREE.Vector3[] = [];
-    for (let z = Z_START; z >= Z_END; z -= 2.5) {
+    for (let z = Z_START; z >= Z_END; z -= 2.2) {
       for (const side of [-1, 1] as const) {
         const swMinX = side * halfStreetW;
         const swMaxX = side * (halfStreetW + sidewalkW);
         flagstoneLines.push(
-          new THREE.Vector3(swMinX, 0.23, z),
-          new THREE.Vector3(swMaxX, 0.23, z)
+          new THREE.Vector3(swMinX, 0.245, z),
+          new THREE.Vector3(swMaxX, 0.245, z),
+          // Curb riser joint
+          new THREE.Vector3(side * (halfStreetW + 0.12), 0.12, z),
+          new THREE.Vector3(side * (halfStreetW + 0.12), 0.35, z)
         );
       }
     }
     for (const side of [-1, 1] as const) {
-      const swMidX = side * (halfStreetW + sidewalkW * 0.5);
-      flagstoneLines.push(
-        new THREE.Vector3(swMidX, 0.23, Z_START),
-        new THREE.Vector3(swMidX, 0.23, Z_END)
-      );
+      for (const frac of [0.33, 0.67]) {
+        const swMidX = side * (halfStreetW + sidewalkW * frac);
+        flagstoneLines.push(
+          new THREE.Vector3(swMidX, 0.245, Z_START),
+          new THREE.Vector3(swMidX, 0.245, Z_END)
+        );
+      }
     }
     const flagstoneSegs = createPlotterSegments(flagstoneLines, 'secondary');
-    flagstoneSegs.userData.pointsThreshold = 25;
+    flagstoneSegs.userData.pointsThreshold = 22;
+    flagstoneSegs.userData.alwaysVisibleInSobel = true;
     roadGroup.add(flagstoneSegs);
 
-    // Micro-detail: Crosswalk zebra crossings at intersections
+    // Micro-detail: Crosswalk zebra crossings & stop bars at intersections
     if (!isNarrowAlley) {
       const crosswalkLines: THREE.Vector3[] = [];
       for (const iz of INTERSECTION_Z) {
-        for (let offset = -2.4; offset <= 2.4; offset += 0.8) {
+        // Longitudinal zebra bars across the street
+        for (let x = -halfStreetW + 0.8; x <= halfStreetW - 0.8; x += 0.9) {
           crosswalkLines.push(
-            new THREE.Vector3(-halfStreetW + 0.5, 0.115, iz + offset),
-            new THREE.Vector3(halfStreetW - 0.5, 0.115, iz + offset)
+            new THREE.Vector3(x - 0.2, 0.14, iz - 2.6),
+            new THREE.Vector3(x - 0.2, 0.14, iz + 2.6),
+            new THREE.Vector3(x + 0.2, 0.14, iz - 2.6),
+            new THREE.Vector3(x + 0.2, 0.14, iz + 2.6),
+            new THREE.Vector3(x - 0.2, 0.14, iz - 2.6),
+            new THREE.Vector3(x + 0.2, 0.14, iz - 2.6),
+            new THREE.Vector3(x - 0.2, 0.14, iz + 2.6),
+            new THREE.Vector3(x + 0.2, 0.14, iz + 2.6)
           );
         }
+        // Stop bars before & after crosswalk
+        crosswalkLines.push(
+          new THREE.Vector3(-halfStreetW + 0.5, 0.14, iz - 3.4),
+          new THREE.Vector3(halfStreetW - 0.5, 0.14, iz - 3.4),
+          new THREE.Vector3(-halfStreetW + 0.5, 0.14, iz + 3.4),
+          new THREE.Vector3(halfStreetW - 0.5, 0.14, iz + 3.4)
+        );
       }
-      const crosswalkSegs = createPlotterSegments(crosswalkLines, 'secondary');
-      crosswalkSegs.userData.pointsThreshold = 20;
+      const crosswalkSegs = createPlotterSegments(crosswalkLines, 'primary');
+      crosswalkSegs.userData.pointsThreshold = 15;
+      crosswalkSegs.userData.alwaysVisibleInSobel = true;
       roadGroup.add(crosswalkSegs);
 
-      // Micro-detail: Storm drain inlet grates along curb gutters
-      const drainLines: THREE.Vector3[] = [];
-      for (let z = Z_START - 15; z >= Z_END + 15; z -= 22) {
+      // Micro-detail: Dashed intermediate lane dividers & utility manholes
+      const laneAndManholeLines: THREE.Vector3[] = [];
+      const laneX = halfStreetW * 0.48;
+      for (let z = Z_START - 4; z >= Z_END + 4; z -= 6.5) {
         for (const side of [-1, 1] as const) {
-          const gx = side * (halfStreetW - 0.5);
-          const gz = z;
-          drainLines.push(
-            new THREE.Vector3(gx - 0.35, 0.112, gz - 0.6),
-            new THREE.Vector3(gx + 0.35, 0.112, gz - 0.6),
-            new THREE.Vector3(gx + 0.35, 0.112, gz - 0.6),
-            new THREE.Vector3(gx + 0.35, 0.112, gz + 0.6),
-            new THREE.Vector3(gx + 0.35, 0.112, gz + 0.6),
-            new THREE.Vector3(gx - 0.35, 0.112, gz + 0.6),
-            new THREE.Vector3(gx - 0.35, 0.112, gz + 0.6),
-            new THREE.Vector3(gx - 0.35, 0.112, gz - 0.6)
+          laneAndManholeLines.push(
+            new THREE.Vector3(side * laneX, 0.14, z),
+            new THREE.Vector3(side * laneX, 0.14, z - 3.2)
           );
-          for (let b = -0.3; b <= 0.3; b += 0.25) {
-            drainLines.push(
-              new THREE.Vector3(gx - 0.3, 0.112, gz + b),
-              new THREE.Vector3(gx + 0.3, 0.112, gz + b)
+        }
+      }
+      for (let z = Z_START - 15; z >= Z_END + 15; z -= 20) {
+        // Roadway utility manhole octagon + inner grid
+        const mr = 0.65;
+        const mx = (z % 40 === 0 ? 1 : -1) * 1.9;
+        laneAndManholeLines.push(
+          new THREE.Vector3(mx - mr, 0.14, z - mr),
+          new THREE.Vector3(mx + mr, 0.14, z - mr),
+          new THREE.Vector3(mx + mr, 0.14, z - mr),
+          new THREE.Vector3(mx + mr, 0.14, z + mr),
+          new THREE.Vector3(mx + mr, 0.14, z + mr),
+          new THREE.Vector3(mx - mr, 0.14, z + mr),
+          new THREE.Vector3(mx - mr, 0.14, z + mr),
+          new THREE.Vector3(mx - mr, 0.14, z - mr),
+          new THREE.Vector3(mx - mr, 0.14, z),
+          new THREE.Vector3(mx + mr, 0.14, z),
+          new THREE.Vector3(mx, 0.14, z - mr),
+          new THREE.Vector3(mx, 0.14, z + mr)
+        );
+        for (const side of [-1, 1] as const) {
+          const gx = side * (halfStreetW - 0.55);
+          const gz = z;
+          laneAndManholeLines.push(
+            new THREE.Vector3(gx - 0.35, 0.14, gz - 0.65),
+            new THREE.Vector3(gx + 0.35, 0.14, gz - 0.65),
+            new THREE.Vector3(gx + 0.35, 0.14, gz - 0.65),
+            new THREE.Vector3(gx + 0.35, 0.14, gz + 0.65),
+            new THREE.Vector3(gx + 0.35, 0.14, gz + 0.65),
+            new THREE.Vector3(gx - 0.35, 0.14, gz + 0.65),
+            new THREE.Vector3(gx - 0.35, 0.14, gz + 0.65),
+            new THREE.Vector3(gx - 0.35, 0.14, gz - 0.65)
+          );
+          for (let b = -0.35; b <= 0.35; b += 0.22) {
+            laneAndManholeLines.push(
+              new THREE.Vector3(gx - 0.3, 0.14, gz + b),
+              new THREE.Vector3(gx + 0.3, 0.14, gz + b)
             );
           }
         }
       }
-      const drainSegs = createPlotterSegments(drainLines, 'secondary');
-      drainSegs.userData.pointsThreshold = 35;
+      const drainSegs = createPlotterSegments(laneAndManholeLines, 'secondary');
+      drainSegs.userData.pointsThreshold = 38;
+      drainSegs.userData.alwaysVisibleInSobel = true;
       roadGroup.add(drainSegs);
 
-      // Micro-detail: Corner bollards protecting sidewalk corners at intersections
-      const bollardLines: THREE.Vector3[] = [];
+      // Micro-detail: Corner bollards & overhead intersection traffic signal gantries
+      const bollardAndGantryLines: THREE.Vector3[] = [];
       for (const iz of INTERSECTION_Z) {
+        // Overhead traffic signal truss gantry spanning the street at intersection
+        const gY1 = 5.8;
+        const gY2 = 6.35;
+        const gX = halfStreetW + 0.45;
+        const gz = iz - 4.2;
+        bollardAndGantryLines.push(
+          // Left & right support columns
+          new THREE.Vector3(-gX, 0.24, gz),
+          new THREE.Vector3(-gX, gY2, gz),
+          new THREE.Vector3(gX, 0.24, gz),
+          new THREE.Vector3(gX, gY2, gz),
+          // Top and bottom gantry chords
+          new THREE.Vector3(-gX, gY1, gz),
+          new THREE.Vector3(gX, gY1, gz),
+          new THREE.Vector3(-gX, gY2, gz),
+          new THREE.Vector3(gX, gY2, gz)
+        );
+        // Truss diagonals & hanging signal heads
+        for (let x = -gX; x < gX; x += 2.0) {
+          const nextX = Math.min(gX, x + 2.0);
+          bollardAndGantryLines.push(
+            new THREE.Vector3(x, gY1, gz),
+            new THREE.Vector3(nextX, gY2, gz),
+            new THREE.Vector3(x, gY2, gz),
+            new THREE.Vector3(nextX, gY1, gz)
+          );
+        }
+        for (const sigX of [-halfStreetW * 0.45, 0, halfStreetW * 0.45]) {
+          bollardAndGantryLines.push(
+            new THREE.Vector3(sigX - 0.25, gY1 - 0.85, gz),
+            new THREE.Vector3(sigX + 0.25, gY1 - 0.85, gz),
+            new THREE.Vector3(sigX + 0.25, gY1 - 0.85, gz),
+            new THREE.Vector3(sigX + 0.25, gY1, gz),
+            new THREE.Vector3(sigX + 0.25, gY1, gz),
+            new THREE.Vector3(sigX - 0.25, gY1, gz),
+            new THREE.Vector3(sigX - 0.25, gY1, gz),
+            new THREE.Vector3(sigX - 0.25, gY1 - 0.85, gz)
+          );
+        }
+
         for (const side of [-1, 1] as const) {
-          for (const zOffset of [-4.5, 4.5]) {
+          for (const zOffset of [-4.5, -3.2, 3.2, 4.5]) {
             const bx = side * (halfStreetW + 0.35);
             const bz = iz + zOffset;
-            bollardLines.push(
-              new THREE.Vector3(bx - 0.08, 0.23, bz - 0.08),
-              new THREE.Vector3(bx - 0.08, 1.05, bz - 0.08),
-              new THREE.Vector3(bx + 0.08, 0.23, bz - 0.08),
-              new THREE.Vector3(bx + 0.08, 1.05, bz - 0.08),
-              new THREE.Vector3(bx + 0.08, 0.23, bz + 0.08),
-              new THREE.Vector3(bx + 0.08, 1.05, bz + 0.08),
-              new THREE.Vector3(bx - 0.08, 0.23, bz + 0.08),
-              new THREE.Vector3(bx - 0.08, 1.05, bz + 0.08),
-              // Cap
-              new THREE.Vector3(bx - 0.08, 1.05, bz - 0.08),
-              new THREE.Vector3(bx + 0.08, 1.05, bz - 0.08),
-              new THREE.Vector3(bx + 0.08, 1.05, bz + 0.08),
-              new THREE.Vector3(bx - 0.08, 1.05, bz + 0.08)
+            bollardAndGantryLines.push(
+              new THREE.Vector3(bx - 0.09, 0.24, bz - 0.09),
+              new THREE.Vector3(bx - 0.09, 1.1, bz - 0.09),
+              new THREE.Vector3(bx + 0.09, 0.24, bz - 0.09),
+              new THREE.Vector3(bx + 0.09, 1.1, bz - 0.09),
+              new THREE.Vector3(bx + 0.09, 0.24, bz + 0.09),
+              new THREE.Vector3(bx + 0.09, 1.1, bz + 0.09),
+              new THREE.Vector3(bx - 0.09, 0.24, bz + 0.09),
+              new THREE.Vector3(bx - 0.09, 1.1, bz + 0.09),
+              new THREE.Vector3(bx - 0.09, 1.1, bz - 0.09),
+              new THREE.Vector3(bx + 0.09, 1.1, bz - 0.09),
+              new THREE.Vector3(bx + 0.09, 1.1, bz + 0.09),
+              new THREE.Vector3(bx - 0.09, 1.1, bz + 0.09)
             );
           }
         }
       }
-      const bollardSegs = createPlotterSegments(bollardLines, 'primary');
-      bollardSegs.userData.pointsThreshold = 50;
+      const bollardSegs = createPlotterSegments(bollardAndGantryLines, 'primary');
+      bollardSegs.userData.pointsThreshold = 55;
+      bollardSegs.userData.alwaysVisibleInSobel = true;
       roadGroup.add(bollardSegs);
     }
   }

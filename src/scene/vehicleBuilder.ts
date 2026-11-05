@@ -31,7 +31,8 @@ function addWheel(
     new THREE.Vector3(outerX, y, z + r),
   ];
   const spokeSegs = createPlotterSegments(spokeLines, 'secondary');
-  spokeSegs.userData.pointsThreshold = 30;
+  spokeSegs.userData.pointsThreshold = 25;
+  spokeSegs.userData.alwaysVisibleInSobel = true;
   group.add(spokeSegs);
 }
 
@@ -76,7 +77,7 @@ export function createCarModel(): THREE.Group {
   addWheel(car, -0.88, 0.35, 1.35, 0.35, 0.24);
   addWheel(car, 0.88, 0.35, 1.35, 0.35, 0.24);
 
-  // Front grille and headlights micro-detail
+  // Front grille, headlights, hood creases & roof rack micro-detail
   const frontDetails: THREE.Vector3[] = [
     new THREE.Vector3(-0.75, 0.58, -2.26),
     new THREE.Vector3(-0.45, 0.58, -2.26),
@@ -86,9 +87,20 @@ export function createCarModel(): THREE.Group {
     new THREE.Vector3(0.35, 0.52, -2.26),
     new THREE.Vector3(-0.35, 0.44, -2.26),
     new THREE.Vector3(0.35, 0.44, -2.26),
+    // Hood longitudinal creases
+    new THREE.Vector3(-0.48, 0.89, -0.92),
+    new THREE.Vector3(-0.48, 0.89, -2.2),
+    new THREE.Vector3(0.48, 0.89, -0.92),
+    new THREE.Vector3(0.48, 0.89, -2.2),
+    // Roof rack bars
+    new THREE.Vector3(-0.68, 1.45, -0.45),
+    new THREE.Vector3(0.68, 1.45, -0.45),
+    new THREE.Vector3(-0.68, 1.45, 0.75),
+    new THREE.Vector3(0.68, 1.45, 0.75),
   ];
   const frontSegs = createPlotterSegments(frontDetails, 'secondary');
-  frontSegs.userData.pointsThreshold = 40;
+  frontSegs.userData.pointsThreshold = 38;
+  frontSegs.userData.alwaysVisibleInSobel = true;
   car.add(frontSegs);
 
   return car;

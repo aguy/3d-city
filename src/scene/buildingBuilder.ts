@@ -595,9 +595,23 @@ function addWindowsAndBalconies(
     }
   });
 
-  // --- E. ARCHITECTURAL STRINGCOURSES & FACADE PANEL JOINTS (Points & Micro-detail) ---
+  // --- E. PROGRESSIVE OBJECT MICRO-DETAILS TIED TO OBJECT & POINTS % SLIDER ---
+  // Tier 1 (20%): Horizontal floor belt stringcourses across front and side facades
   const stringcourseLines: THREE.Vector3[] = [];
-  floors.forEach((yBot) => {
+  // Tier 2 (38%): Vertical structural bay piers & pilasters between window bays
+  const verticalPierLines: THREE.Vector3[] = [];
+  // Tier 3 (55%): Spandrel panel frames & roofline cornice dentil ticks
+  const spandrelLines: THREE.Vector3[] = [];
+  // Tier 4 (72%): Structural cross-bracing & rooftop lattice parapet frames
+  const bracingLines: THREE.Vector3[] = [];
+  // Tier 5 (88%): Fine stone ashlar coursing & corner quoin ticks
+  const ashlarLines: THREE.Vector3[] = [];
+
+  floors.forEach((yBot, floorIdx) => {
+    const winH = Math.min(2.15, floorHeight * 0.62);
+    const yTop = yBot + winH;
+
+    // Tier 1: Stringcourses
     stringcourseLines.push(
       new THREE.Vector3(sfX, yBot - 0.22, zCenter - halfZ),
       new THREE.Vector3(sfX, yBot - 0.22, zCenter + halfZ)
@@ -612,12 +626,80 @@ function addWindowsAndBalconies(
         )
       );
     }
+
+    // Tier 3: Spandrel band top lines & corner quoins
+    spandrelLines.push(
+      new THREE.Vector3(sfX, yTop + 0.24, zCenter - halfZ),
+      new THREE.Vector3(sfX, yTop + 0.24, zCenter + halfZ)
+    );
+
+    // Tier 5: Intermediate ashlar stone coursing lines + corner quoin ticks
+    const yMidCourse = yBot + winH * 0.5;
+    ashlarLines.push(
+      new THREE.Vector3(sfX, yMidCourse, zCenter - halfZ),
+      new THREE.Vector3(sfX, yMidCourse, zCenter - halfZ + 1.1),
+      new THREE.Vector3(sfX, yMidCourse, zCenter + halfZ - 1.1),
+      new THREE.Vector3(sfX, yMidCourse, zCenter + halfZ)
+    );
+
+    // Tier 4: Spandrel X-bracing under windows on alternating bays
+    for (let b = 0; b < numBays; b++) {
+      if ((b + floorIdx) % 2 !== 0) continue;
+      const bzCenter = zCenter - usableZ / 2 + (b + 0.5) * actualBayW;
+      const wHalf = Math.min(0.88, actualBayW * 0.34);
+      const spBot = yBot - 0.85;
+      const spTop = yBot - 0.22;
+      if (spBot > podiumY) {
+        bracingLines.push(
+          new THREE.Vector3(sfX, spBot, bzCenter - wHalf),
+          new THREE.Vector3(sfX, spTop, bzCenter + wHalf),
+          new THREE.Vector3(sfX, spBot, bzCenter + wHalf),
+          new THREE.Vector3(sfX, spTop, bzCenter - wHalf)
+        );
+      }
+    }
   });
-  if (stringcourseLines.length > 0) {
-    const scSegs = createPlotterSegments(stringcourseLines, 'secondary');
-    scSegs.userData.pointsThreshold = 30;
-    building.add(scSegs);
+
+  // Tier 2: Vertical bay divider piers from podium to roof
+  for (let b = 0; b <= numBays; b++) {
+    const pierZ = zCenter - usableZ / 2 + b * actualBayW;
+    verticalPierLines.push(
+      new THREE.Vector3(sfX, podiumY, pierZ),
+      new THREE.Vector3(sfX, height - 0.4, pierZ)
+    );
   }
+  for (const zDir of [-1, 1] as const) {
+    const zFace = zCenter + zDir * (halfZ + 0.03);
+    for (let sb = 1; sb < sideBays; sb++) {
+      const pierX = xCenter - usableX / 2 + sb * sideBayW;
+      verticalPierLines.push(
+        new THREE.Vector3(pierX, podiumY, zFace),
+        new THREE.Vector3(pierX, height - 0.4, zFace)
+      );
+    }
+  }
+
+  // Tier 3: Roofline cornice dentil ticks & roof parapet rail
+  for (let z = zCenter - halfZ + 0.5; z <= zCenter + halfZ - 0.5; z += 0.9) {
+    spandrelLines.push(
+      new THREE.Vector3(sfX, height - 0.55, z),
+      new THREE.Vector3(sfX, height - 0.05, z)
+    );
+  }
+
+  const addPointsTier = (pts: THREE.Vector3[], threshold: number, weight: 'primary' | 'secondary' = 'secondary') => {
+    if (pts.length === 0) return;
+    const segs = createPlotterSegments(pts, weight);
+    segs.userData.pointsThreshold = threshold;
+    segs.userData.alwaysVisibleInSobel = true;
+    building.add(segs);
+  };
+
+  addPointsTier(stringcourseLines, 20, 'secondary');
+  addPointsTier(verticalPierLines, 38, 'secondary');
+  addPointsTier(spandrelLines, 55, 'secondary');
+  addPointsTier(bracingLines, 72, 'secondary');
+  addPointsTier(ashlarLines, 88, 'secondary');
 }
 
 function createBuildingFromSpec(
@@ -1047,21 +1129,29 @@ export function applyBuildingDetailLevel(
 ): void {
   buildingsGroup.traverse((obj) => {
     if (typeof obj.userData.windowThreshold === 'number') {
-      obj.visible =
+      const vis =
         params.windowDensity > 0 &&
         obj.userData.windowThreshold <= params.windowDensity;
+      obj.visible = vis;
+      obj.userData.hiddenByDetail = !vis;
     } else if (typeof obj.userData.balconyThreshold === 'number') {
-      obj.visible =
+      const vis =
         params.balconyDensity > 0 &&
         obj.userData.balconyThreshold <= params.balconyDensity;
+      obj.visible = vis;
+      obj.userData.hiddenByDetail = !vis;
     } else if (typeof obj.userData.detailThreshold === 'number') {
-      obj.visible =
+      const vis =
         params.buildingDetail > 0 &&
         obj.userData.detailThreshold <= params.buildingDetail;
+      obj.visible = vis;
+      obj.userData.hiddenByDetail = !vis;
     } else if (typeof obj.userData.pointsThreshold === 'number') {
       const pd =
         typeof params.pointsDensity === 'number' ? params.pointsDensity : 25;
-      obj.visible = pd > 0 && obj.userData.pointsThreshold <= pd;
+      const vis = pd > 0 && obj.userData.pointsThreshold <= pd;
+      obj.visible = vis;
+      obj.userData.hiddenByDetail = !vis;
     }
   });
 }

@@ -381,14 +381,17 @@ export const sharedPointsMaterial = new THREE.ShaderMaterial({
       }
       vec4 mvPosition = viewMatrix * worldPos;
       vPlotterViewDepth = -mvPosition.z;
-      gl_Position = projectionMatrix * mvPosition;
+      // Bias slightly toward camera in view space so points on building/road surfaces never lose depth test to occluders
+      vec4 biasedMv = mvPosition;
+      biasedMv.z += 0.26;
+      gl_Position = projectionMatrix * biasedMv;
       if (abs(uLensCurvature) > 0.001) {
         vec2 ndc = gl_Position.xy / max(0.25, gl_Position.w);
         float r2 = clamp(dot(ndc, ndc), 0.0, 2.5);
         gl_Position.xy *= (1.0 - uLensCurvature * 0.24 * r2);
       }
-      float depthAtten = clamp(48.0 / max(1.0, -mvPosition.z), 0.45, 2.0);
-      gl_PointSize = clamp(uPointSize * depthAtten, 1.5, 10.0);
+      float depthAtten = clamp(68.0 / max(10.0, -mvPosition.z), 0.6, 2.4);
+      gl_PointSize = clamp(uPointSize * depthAtten, 2.8, 14.0);
     }
   `,
   fragmentShader: /* glsl */ `
@@ -402,12 +405,12 @@ export const sharedPointsMaterial = new THREE.ShaderMaterial({
       vec2 coord = gl_PointCoord - vec2(0.5);
       float distSq = dot(coord, coord);
       if (distSq > 0.25) discard;
-      float alpha = smoothstep(0.25, 0.14, distSq);
+      float alpha = smoothstep(0.25, 0.16, distSq);
       if (uDepthTaper > 0.001) {
         float distFactor = smoothstep(18.0, 210.0, vPlotterViewDepth);
         alpha *= mix(1.0, 1.0 - distFactor * 0.82, uDepthTaper);
       }
-      gl_FragColor = vec4(uInkColor, alpha * 0.95);
+      gl_FragColor = vec4(uInkColor, clamp(alpha * 1.15, 0.0, 1.0));
     }
   `,
   transparent: true,
@@ -422,6 +425,8 @@ export function createPlotterPoints(
   geometry: THREE.BufferGeometry
 ): THREE.Points {
   const points = new THREE.Points(geometry, sharedPointsMaterial);
+  points.renderOrder = 5;
+  points.frustumCulled = false;
   points.userData.isPlotterPoints = true;
   points.userData.alwaysVisibleInSobel = true;
   return points;
@@ -523,14 +528,15 @@ export function applyPlotterEffects(
     -1,
     1
   );
-  plotterStyleUniforms.uPointsDensity.value = THREE.MathUtils.clamp(
+  const normalizedPointsDensity = THREE.MathUtils.clamp(
     (merged.pointsDensity ?? 25) / 100,
     0,
     1
   );
+  plotterStyleUniforms.uPointsDensity.value = normalizedPointsDensity;
   plotterStyleUniforms.uPointSize.value = Math.max(
-    2.0,
-    (merged.lineWeight ?? 1.2) * 2.2
+    3.5,
+    (merged.lineWeight ?? 1.2) * 3.8 * (0.85 + 0.55 * normalizedPointsDensity)
   );
 
   const palette =
@@ -578,6 +584,7 @@ export function createPlotterMesh(
   const fillMat =
     surfaceType === 'road' ? sharedRoadOccluderMaterial : sharedOccluderMaterial;
   const occluder = new THREE.Mesh(geometry, fillMat);
+  occluder.renderOrder = 1;
   occluder.userData.isOccluder = true;
   occluder.userData.defaultMaterial = fillMat;
   occluder.userData.normalMaterial = sharedNormalMaterial;
@@ -593,6 +600,7 @@ export function createPlotterMesh(
         : sharedPrimaryEdgeMaterial;
 
   const lineSegments = new THREE.LineSegments(edgesGeometry, lineMat);
+  lineSegments.renderOrder = 2;
   lineSegments.userData.isEdgeLine = true;
   group.add(lineSegments);
 
@@ -612,6 +620,7 @@ export function createPlotterSegments(
       ? sharedSecondaryEdgeMaterial
       : sharedPrimaryEdgeMaterial;
   const segments = new THREE.LineSegments(geometry, material);
+  segments.renderOrder = 2;
   segments.userData.isEdgeLine = true;
   return segments;
 }
@@ -677,6 +686,10 @@ export function applyRenderModeToScene(
   mode: RenderMode
 ): void {
   scene.traverse((obj) => {
+    if (obj.userData.hiddenByDetail) {
+      obj.visible = false;
+      return;
+    }
     if (obj.userData.isOccluder && obj instanceof THREE.Mesh) {
       if (mode === 'edges-wireframe') {
         obj.visible = false;

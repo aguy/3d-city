@@ -32,8 +32,12 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 }) => {
   const paneMountRef = useRef<HTMLDivElement | null>(null);
   const paneInstanceRef = useRef<Pane | null>(null);
-  const mutableStateRef = useRef<CameraParameters>({ ...params });
+  const mutableStateRef = useRef<CameraParameters>({
+    ...DEFAULT_CAMERA_PARAMS,
+    ...params,
+  });
   const mutableTransitionRef = useRef<TransitionSettings>({
+    ...DEFAULT_TRANSITION_SETTINGS,
     ...transitionSettings,
   });
   const isExternalSyncRef = useRef(false);
@@ -49,7 +53,14 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     if (!container) return;
 
     container.innerHTML = '';
-    const state = mutableStateRef.current;
+    const state = Object.assign(
+      mutableStateRef.current,
+      DEFAULT_CAMERA_PARAMS,
+      params
+    );
+    if (typeof state.pointsDensity !== 'number' || Number.isNaN(state.pointsDensity)) {
+      state.pointsDensity = DEFAULT_CAMERA_PARAMS.pointsDensity;
+    }
 
     const pane = new Pane({
       container,
@@ -424,7 +435,14 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 
   // Sync external preset / animation updates into Tweakpane
   useEffect(() => {
-    Object.assign(mutableStateRef.current, params);
+    Object.assign(mutableStateRef.current, DEFAULT_CAMERA_PARAMS, params);
+    if (
+      typeof mutableStateRef.current.pointsDensity !== 'number' ||
+      Number.isNaN(mutableStateRef.current.pointsDensity)
+    ) {
+      mutableStateRef.current.pointsDensity =
+        DEFAULT_CAMERA_PARAMS.pointsDensity;
+    }
     Object.assign(mutableTransitionRef.current, transitionSettings);
     if (paneInstanceRef.current) {
       isExternalSyncRef.current = true;

@@ -21,7 +21,10 @@ import {
   applyBuildingDetailLevel,
   buildBuildingsScene,
 } from '../buildingBuilder';
-import { buildCityPointCloud } from '../pointsBuilder';
+import {
+  buildCityPointCloud,
+  updatePointCloudDensity,
+} from '../pointsBuilder';
 import { buildVehiclesScene, updateVehicles } from '../vehicleBuilder';
 import {
   buildPedestriansScene,
@@ -361,13 +364,33 @@ describe('Plotter Scene & Asset Builders', () => {
       pointCloud.geometry.attributes.position.count
     );
 
-    // Verify applyBuildingDetailLevel controls pointsThreshold visibility
+    // Verify updatePointCloudDensity updates drawRange and visibility
+    updatePointCloudDensity(pointCloud, 0);
+    expect(pointCloud.visible).toBe(false);
+    expect(pointCloud.geometry.drawRange.count).toBe(0);
+
+    updatePointCloudDensity(pointCloud, 50);
+    expect(pointCloud.visible).toBe(true);
+    expect(pointCloud.geometry.drawRange.count).toBe(
+      Math.floor(pointCloud.geometry.attributes.position.count * 0.5)
+    );
+
+    updatePointCloudDensity(pointCloud, 100);
+    expect(pointCloud.visible).toBe(true);
+    expect(pointCloud.geometry.drawRange.count).toBe(
+      pointCloud.geometry.attributes.position.count
+    );
+
+    // Verify applyBuildingDetailLevel controls pointsThreshold visibility and applyRenderModeToScene preserves hiddenByDetail
+    const testScene = new THREE.Scene();
+    testScene.add(buildings);
     applyBuildingDetailLevel(buildings, {
       windowDensity: 100,
       balconyDensity: 100,
       buildingDetail: 100,
       pointsDensity: 0,
     });
+    applyRenderModeToScene(testScene, 'edges-occluded');
     let visiblePointsDetails = 0;
     buildings.traverse((obj) => {
       if (typeof obj.userData.pointsThreshold === 'number' && obj.visible) {
@@ -382,6 +405,7 @@ describe('Plotter Scene & Asset Builders', () => {
       buildingDetail: 100,
       pointsDensity: 100,
     });
+    applyRenderModeToScene(testScene, 'edges-occluded');
     let visiblePointsDetails100 = 0;
     buildings.traverse((obj) => {
       if (typeof obj.userData.pointsThreshold === 'number' && obj.visible) {

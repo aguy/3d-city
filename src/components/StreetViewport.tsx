@@ -23,7 +23,10 @@ import {
   applyBuildingDetailLevel,
   buildBuildingsScene,
 } from '../scene/buildingBuilder';
-import { buildCityPointCloud } from '../scene/pointsBuilder';
+import {
+  buildCityPointCloud,
+  updatePointCloudDensity,
+} from '../scene/pointsBuilder';
 import { buildVehiclesScene, updateVehicles } from '../scene/vehicleBuilder';
 import {
   buildPedestriansScene,
@@ -168,7 +171,8 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     let lastWindowDensity = paramsRef.current.windowDensity;
     let lastBalconyDensity = paramsRef.current.balconyDensity;
     let lastBuildingDetail = paramsRef.current.buildingDetail;
-    let lastPointsDensity = paramsRef.current.pointsDensity;
+    let lastPointsDensity =
+      paramsRef.current.pointsDensity ?? DEFAULT_CAMERA_PARAMS.pointsDensity;
     let lastVisualizerSignature = '';
 
     const updateSceneDetailsVisibility = (
@@ -177,11 +181,21 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     ) => {
       targetScene.traverse((obj) => {
         if (typeof obj.userData.pointsThreshold === 'number') {
-          obj.visible = pd > 0 && obj.userData.pointsThreshold <= pd;
+          const vis = pd > 0 && obj.userData.pointsThreshold <= pd;
+          obj.visible = vis;
+          obj.userData.hiddenByDetail = !vis;
         }
       });
+      updatePointCloudDensity(pointsGroup, pd);
     };
 
+    applyBuildingDetailLevel(buildingsGroup, {
+      windowDensity: lastWindowDensity,
+      balconyDensity: lastBalconyDensity,
+      buildingDetail: lastBuildingDetail,
+      pointsDensity: lastPointsDensity,
+    });
+    updateSceneDetailsVisibility(scene, lastPointsDensity);
     applyRenderModeToScene(scene, lastRenderMode);
     applyPlotterEffects(paramsRef.current);
     sobelPipeline.setStyleUniforms(
@@ -190,13 +204,6 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       paramsRef.current.lineJitter,
       paramsRef.current
     );
-    applyBuildingDetailLevel(buildingsGroup, {
-      windowDensity: lastWindowDensity,
-      balconyDensity: lastBalconyDensity,
-      buildingDetail: lastBuildingDetail,
-      pointsDensity: lastPointsDensity,
-    });
-    updateSceneDetailsVisibility(scene, lastPointsDensity);
 
     // 6. Responsive ResizeObserver
     const handleResize = () => {
@@ -266,27 +273,33 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
         scene.add(pedestriansGroup);
         scene.add(pointsGroup);
 
-        applyRenderModeToScene(scene, currentParams.renderMode);
+        const currentPointsDensity =
+          currentParams.pointsDensity ?? DEFAULT_CAMERA_PARAMS.pointsDensity;
+
         applyBuildingDetailLevel(buildingsGroup, {
           windowDensity: currentParams.windowDensity,
           balconyDensity: currentParams.balconyDensity,
           buildingDetail: currentParams.buildingDetail,
-          pointsDensity: currentParams.pointsDensity,
+          pointsDensity: currentPointsDensity,
         });
-        updateSceneDetailsVisibility(scene, currentParams.pointsDensity);
+        updateSceneDetailsVisibility(scene, currentPointsDensity);
+        applyRenderModeToScene(scene, currentParams.renderMode);
       }
+
+      const currentPointsDensity =
+        currentParams.pointsDensity ?? DEFAULT_CAMERA_PARAMS.pointsDensity;
 
       // Update building detail level (windows, balconies, architecture, points density) if changed
       if (
         currentParams.windowDensity !== lastWindowDensity ||
         currentParams.balconyDensity !== lastBalconyDensity ||
         currentParams.buildingDetail !== lastBuildingDetail ||
-        currentParams.pointsDensity !== lastPointsDensity
+        currentPointsDensity !== lastPointsDensity
       ) {
         lastWindowDensity = currentParams.windowDensity;
         lastBalconyDensity = currentParams.balconyDensity;
         lastBuildingDetail = currentParams.buildingDetail;
-        lastPointsDensity = currentParams.pointsDensity;
+        lastPointsDensity = currentPointsDensity;
         applyBuildingDetailLevel(buildingsGroup, {
           windowDensity: lastWindowDensity,
           balconyDensity: lastBalconyDensity,
@@ -294,6 +307,7 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
           pointsDensity: lastPointsDensity,
         });
         updateSceneDetailsVisibility(scene, lastPointsDensity);
+        applyRenderModeToScene(scene, currentParams.renderMode);
       }
 
       // Sync all plotter pen, shading, lens, depth, and paper theme uniforms
