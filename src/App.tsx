@@ -12,6 +12,7 @@ import {
   evaluateEasing,
   interpolateCameraParams,
 } from './scene/transitionController';
+import { SceneDescriptor } from './types/scenePromptTypes';
 import './App.css';
 
 const INITIAL_TO_PARAMS: CameraParameters = {
@@ -50,6 +51,9 @@ export const App: React.FC = () => {
   const [isTouring, setIsTouring] = useState<boolean>(false);
   const [transitionSettings, setTransitionSettings] =
     useState<TransitionSettings>(DEFAULT_TRANSITION_SETTINGS);
+  const [sceneDescriptor, setSceneDescriptor] = useState<SceneDescriptor | undefined>(
+    undefined
+  );
 
   const tourIndexRef = useRef<number>(0);
   const progressRef = useRef<number>(progressT);
@@ -97,6 +101,31 @@ export const App: React.FC = () => {
     toParamsRef.current = syncStyle(toParamsRef.current);
     setFromParams(fromParamsRef.current);
     setToParams(toParamsRef.current);
+  }, []);
+
+  const handleGenerateScene = useCallback((descriptor: SceneDescriptor) => {
+    setSceneDescriptor(descriptor);
+
+    // Apply recommended style and camera
+    const current = cameraParamsRef.current;
+    const nextStyle: CameraParameters = {
+      ...current,
+      ...descriptor.recommendedStyle,
+      ...descriptor.recommendedCamera,
+    };
+
+    cameraParamsRef.current = nextStyle;
+    setCameraParams(nextStyle);
+
+    // Update transition keyframes so animating stays within this scene's style
+    fromParamsRef.current = nextStyle;
+    toParamsRef.current = nextStyle;
+    setFromParams(nextStyle);
+    setToParams(nextStyle);
+    setFromLabel(descriptor.name);
+    setToLabel(`${descriptor.name} (View 2)`);
+    setProgressT(0);
+    setIsPlaying(false);
   }, []);
 
   // Clicking a preset triggers an animated transition from current pose -> preset pose
@@ -372,6 +401,8 @@ export const App: React.FC = () => {
       />
       <StreetViewport
         params={cameraParams}
+        sceneDescriptor={sceneDescriptor}
+        onGenerateScene={handleGenerateScene}
         fromParams={fromParams}
         toParams={toParams}
         fromLabel={fromLabel}

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createPlotterMesh, createPlotterSegments } from './plotterMaterial';
+import { SceneDescriptor } from '../types/scenePromptTypes';
 
 interface BuildingSpec {
   side: -1 | 1;
@@ -594,9 +595,16 @@ function addWindowsAndBalconies(
   });
 }
 
-function createBuildingFromSpec(spec: BuildingSpec): THREE.Group {
+function createBuildingFromSpec(
+  spec: BuildingSpec,
+  descriptor?: SceneDescriptor
+): THREE.Group {
   const building = new THREE.Group();
-  const baseOffset = spec.row === 1 ? 12.2 : 31.5;
+  const streetW = descriptor?.streetWidth ?? 16.0;
+  const sidewalkW = descriptor?.sidewalkWidth ?? 4.2;
+  const setback = streetW / 2 + sidewalkW;
+
+  const baseOffset = spec.row === 1 ? setback : setback + 19.0;
   const xCenter = spec.side * (baseOffset + spec.depthX / 2);
   const streetWallX = xCenter - spec.side * (spec.depthX / 2);
   const outwardDir = (-spec.side) as -1 | 1;
@@ -849,7 +857,7 @@ function createBuildingFromSpec(spec: BuildingSpec): THREE.Group {
   return building;
 }
 
-export function buildBuildingsScene(): THREE.Group {
+export function buildBuildingsScene(descriptor?: SceneDescriptor): THREE.Group {
   const group = new THREE.Group();
   group.name = 'UrbanStreetWalls';
 
@@ -878,6 +886,10 @@ export function buildBuildingsScene(): THREE.Group {
 
   let buildingCounter = 0;
 
+  const minH = descriptor?.buildingHeights.min ?? 20;
+  const maxH = descriptor?.buildingHeights.max ?? 75;
+  const hRange = Math.max(8, maxH - minH);
+
   blocks.forEach((block, blockIdx) => {
     for (const side of [-1, 1] as const) {
       // Subdivide each city block into 3 packed front-row buildings
@@ -896,50 +908,70 @@ export function buildBuildingsScene(): THREE.Group {
         const style =
           styles[(blockIdx * 3 + subIdx + (side === 1 ? 2 : 0)) % styles.length];
 
-        const baseHeight =
-          style === 'setback-tower'
-            ? 44 + r1 * 38
-            : style === 'brutalist-slab'
-              ? 34 + r1 * 28
-              : style === 'grid-office'
-                ? 26 + r1 * 24
-                : 20 + r1 * 16;
-
+        const baseHeight = minH + r1 * hRange * (style === 'setback-tower' ? 1.0 : 0.75);
         const depthX = 14 + r2 * 4.5;
         buildingCounter++;
 
         group.add(
-          createBuildingFromSpec({
-            side,
-            zCenter,
-            widthZ,
-            depthX,
-            height: baseHeight,
-            style,
-            row: 1,
-            seedOffset: buildingCounter,
-          })
+          createBuildingFromSpec(
+            {
+              side,
+              zCenter,
+              widthZ,
+              depthX,
+              height: baseHeight,
+              style,
+              row: 1,
+              seedOffset: buildingCounter,
+            },
+            descriptor
+          )
         );
       });
 
       // Second row of taller skyline towers behind the street wall
       const backMidZ = (block.zStart + block.zEnd) / 2;
-      const backHeight = 58 + nextRand() * 42;
+      const backHeight = minH * 1.4 + nextRand() * hRange * 1.2;
       buildingCounter++;
       group.add(
-        createBuildingFromSpec({
-          side,
-          zCenter: backMidZ + (side === 1 ? 6 : -6),
-          widthZ: totalBlockZ * 0.55,
-          depthX: 18,
-          height: backHeight,
-          style: blockIdx % 2 === 0 ? 'setback-tower' : 'brutalist-slab',
-          row: 2,
-          seedOffset: buildingCounter,
-        })
+        createBuildingFromSpec(
+          {
+            side,
+            zCenter: backMidZ + (side === 1 ? 6 : -6),
+            widthZ: totalBlockZ * 0.55,
+            depthX: 18,
+            height: backHeight,
+            style: blockIdx % 2 === 0 ? 'setback-tower' : 'brutalist-slab',
+            row: 2,
+            seedOffset: buildingCounter,
+          },
+          descriptor
+        )
       );
     }
   });
+
+  // Optional Skybridges connecting buildings across the street
+  if (descriptor?.hasSkybridges) {
+    const bridgeZ = [70, -3, -70, -140];
+    const streetW = descriptor?.streetWidth ?? 16.0;
+    const sidewalkW = descriptor?.sidewalkWidth ?? 4.2;
+    const bridgeSpan = streetW + sidewalkW * 2 + 10;
+
+    for (const bz of bridgeZ) {
+      const bridgeY = 28 + (Math.abs(bz) % 20);
+      const bridgeGeo = new THREE.BoxGeometry(bridgeSpan, 3.2, 4.0);
+      bridgeGeo.translate(0, bridgeY, bz);
+      group.add(createPlotterMesh(bridgeGeo));
+
+      // Side glass wire windows
+      for (const dir of [-1, 1] as const) {
+        const railGeo = new THREE.BoxGeometry(bridgeSpan, 0.4, 0.2);
+        railGeo.translate(0, bridgeY + 1.4, bz + dir * 1.9);
+        group.add(createPlotterMesh(railGeo, { inkWeight: 'secondary' }));
+      }
+    }
+  }
 
   // Distant focal landmark tower on the far horizon axis (Z = -278m)
   const landmarkGroup = new THREE.Group();

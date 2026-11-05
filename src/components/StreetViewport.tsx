@@ -15,6 +15,8 @@ import {
   applyRenderModeToScene,
   createTargetReticle,
 } from '../scene/plotterMaterial';
+import { SceneDescriptor } from '../types/scenePromptTypes';
+import { ScenePromptBar } from './ScenePromptBar';
 import { createSobelPipeline } from '../scene/sobelShader';
 import { buildRoadScene } from '../scene/roadBuilder';
 import {
@@ -40,6 +42,8 @@ const DEFAULT_SECOND_KEYFRAME: CameraParameters = {
 
 export interface StreetViewportProps {
   params: CameraParameters;
+  sceneDescriptor?: SceneDescriptor;
+  onGenerateScene?: (descriptor: SceneDescriptor) => void;
   fromParams?: CameraParameters;
   toParams?: CameraParameters;
   fromLabel?: string;
@@ -59,6 +63,8 @@ export interface StreetViewportProps {
 
 export const StreetViewport: React.FC<StreetViewportProps> = ({
   params,
+  sceneDescriptor,
+  onGenerateScene = () => {},
   fromParams = DEFAULT_CAMERA_PARAMS,
   toParams = DEFAULT_SECOND_KEYFRAME,
   fromLabel = 'Canyon Overview',
@@ -92,6 +98,9 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     useRef<TransitionSettings>(transitionSettings);
   transitionSettingsRef.current = transitionSettings;
 
+  const sceneDescriptorRef = useRef<SceneDescriptor | undefined>(sceneDescriptor);
+  sceneDescriptorRef.current = sceneDescriptor;
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -123,9 +132,10 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
 
-    // 4. Populate dense urban street canyon assets + 3D Transition Trajectory Visualizer
-    const roadGroup = buildRoadScene();
-    const buildingsGroup = buildBuildingsScene();
+    // 4. Populate urban street canyon assets + 3D Transition Trajectory Visualizer
+    let currentDescriptor = sceneDescriptorRef.current;
+    let roadGroup = buildRoadScene(currentDescriptor);
+    let buildingsGroup = buildBuildingsScene(currentDescriptor);
     const { group: vehiclesGroup, animatedVehicles } = buildVehiclesScene();
     const { group: pedestriansGroup, animatedPedestrians } =
       buildPedestriansScene();
@@ -196,6 +206,26 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       const currentFromParams = fromParamsRef.current;
       const currentToParams = toParamsRef.current;
       const currentProgressT = progressTRef.current;
+
+      // Check if SceneDescriptor changed to dynamically rebuild ground & buildings
+      if (sceneDescriptorRef.current !== currentDescriptor) {
+        currentDescriptor = sceneDescriptorRef.current;
+        scene.remove(roadGroup);
+        scene.remove(buildingsGroup);
+
+        roadGroup = buildRoadScene(currentDescriptor);
+        buildingsGroup = buildBuildingsScene(currentDescriptor);
+
+        scene.add(roadGroup);
+        scene.add(buildingsGroup);
+
+        applyRenderModeToScene(scene, currentParams.renderMode);
+        applyBuildingDetailLevel(buildingsGroup, {
+          windowDensity: currentParams.windowDensity,
+          balconyDensity: currentParams.balconyDensity,
+          buildingDetail: currentParams.buildingDetail,
+        });
+      }
 
       // Update building detail level (windows, balconies, architecture) if changed
       if (
@@ -324,6 +354,8 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       style={paperStyle}
       aria-label="3D Plotter Street Canyon Viewport"
     >
+      <ScenePromptBar onGenerate={onGenerateScene} />
+
       <div className="viewport-canvas-container" ref={containerRef} />
 
       <div className="viewport-hud-top-left">

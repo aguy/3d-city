@@ -1,6 +1,6 @@
 # Plotter Sketchpad - Street
 
-An interactive 3D WebGL application replicating the "Plotter Sketchpad - Street" aesthetic: real-time camera controls over an architectural, black-and-white wireframe city canyon set against graph paper.
+An interactive 3D WebGL application with Plotter Sketch aesthetic: real-time camera controls over an architectural, black-and-white wireframe scene set against graph paper.
 
 ![Plotter Sketchpad - Street Preview](docs/images/plotter-sketchpad-preview.jpg)
 

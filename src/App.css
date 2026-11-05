@@ -454,3 +454,158 @@ body,
   background: #eae7de;
   padding: 0 3px;
 }
+
+/* Prompt Scene Generator Bar */
+.scene-prompt-container {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  width: calc(100% - 32px);
+  max-width: 900px;
+  background: var(--paper-bg);
+  border: 1px solid var(--border-ink);
+  box-shadow: 2px 2px 0 var(--border-ink);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+}
+
+.prompt-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prompt-status-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 6px;
+  background: var(--border-ink);
+  color: var(--paper-bg);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.prompt-field-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.prompt-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-ink);
+  padding: 6px 26px 6px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink-black);
+  outline: none;
+}
+
+.prompt-input:focus {
+  border-color: var(--ink-black);
+  background: var(--paper-bg);
+}
+
+.prompt-clear-btn {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.prompt-generate-btn,
+.prompt-random-btn {
+  appearance: none;
+  background: var(--ink-black);
+  color: var(--paper-bg);
+  border: 1px solid var(--ink-black);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.1s ease;
+}
+
+.prompt-random-btn {
+  background: var(--paper-bg);
+  color: var(--ink-black);
+  border-color: var(--border-ink);
+}
+
+.prompt-generate-btn:hover,
+.prompt-random-btn:hover {
+  opacity: 0.85;
+}
+
+.prompt-generate-btn:disabled,
+.prompt-random-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prompt-suggestions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.suggestions-label {
+  font-weight: 700;
+  color: var(--ink-muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.suggestions-scroll {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.suggestion-chip {
+  appearance: none;
+  background: var(--paper-bg);
+  color: var(--ink-black);
+  border: 1px solid var(--border-ink);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.suggestion-chip:hover,
+.suggestion-chip.active {
+  background: var(--ink-black);
+  color: var(--paper-bg);
+}
+
+.suggestion-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
