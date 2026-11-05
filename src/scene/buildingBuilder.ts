@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { createPlotterMesh, createPlotterSegments } from './plotterMaterial';
+import {
+  createPlotterMesh,
+  createPlotterSegments,
+  tagObjectDetail,
+} from './plotterMaterial';
 import { SceneDescriptor } from '../types/scenePromptTypes';
 
 interface BuildingSpec {
@@ -22,6 +26,9 @@ export interface BuildingDetailParams {
 
 function tagWindowGroup(obj: THREE.Object3D, threshold: number): THREE.Object3D {
   obj.userData.windowThreshold = threshold;
+  obj.traverse((child) => {
+    child.userData.windowThreshold = threshold;
+  });
   return obj;
 }
 
@@ -30,11 +37,17 @@ function tagBalconyGroup(
   threshold: number
 ): THREE.Object3D {
   obj.userData.balconyThreshold = threshold;
+  obj.traverse((child) => {
+    child.userData.balconyThreshold = threshold;
+  });
   return obj;
 }
 
 function tagDetailGroup(obj: THREE.Object3D, threshold: number): THREE.Object3D {
   obj.userData.detailThreshold = threshold;
+  obj.traverse((child) => {
+    child.userData.detailThreshold = threshold;
+  });
   return obj;
 }
 
@@ -253,7 +266,8 @@ function createWaterTower(
   x: number,
   roofY: number,
   z: number,
-  threshold: number
+  threshold: number,
+  useObjectDetail = false
 ): THREE.Group {
   const tower = new THREE.Group();
 
@@ -283,19 +297,23 @@ function createWaterTower(
   }
   tower.add(createPlotterSegments(braceLines, 'secondary'));
 
-  // Cylindrical tank body
+  // Cylindrical tank body (12 stave segments with thresholdAngle: 1 for full stave wireframe)
   const tankH = 2.9;
-  const tankGeo = new THREE.CylinderGeometry(1.35, 1.35, tankH, 10);
+  const tankGeo = new THREE.CylinderGeometry(1.35, 1.35, tankH, 12);
   tankGeo.translate(x, roofY + legH + tankH / 2, z);
-  tower.add(createPlotterMesh(tankGeo, { thresholdAngle: 12 }));
+  tower.add(createPlotterMesh(tankGeo, { thresholdAngle: 1 }));
 
-  // Conical pitched roof
+  // Conical pitched roof (12 radial facets with thresholdAngle: 1)
   const capH = 1.25;
-  const capGeo = new THREE.ConeGeometry(1.52, capH, 10);
+  const capGeo = new THREE.ConeGeometry(1.52, capH, 12);
   capGeo.translate(x, roofY + legH + tankH + capH / 2, z);
-  tower.add(createPlotterMesh(capGeo, { thresholdAngle: 12 }));
+  tower.add(createPlotterMesh(capGeo, { thresholdAngle: 1 }));
 
-  tagDetailGroup(tower, threshold);
+  if (useObjectDetail) {
+    tagObjectDetail(tower, threshold);
+  } else {
+    tagDetailGroup(tower, threshold);
+  }
   return tower;
 }
 
@@ -595,16 +613,102 @@ function addWindowsAndBalconies(
     }
   });
 
-  // --- E. PROGRESSIVE OBJECT MICRO-DETAILS TIED TO OBJECT & POINTS % SLIDER ---
-  // Tier 1 (20%): Horizontal floor belt stringcourses across front and side facades
+  // --- E. PROGRESSIVE 3D ARCHITECTURAL SUB-MODELS & MESH DETAILS TIED TO OBJECT & POINTS % SLIDER ---
+  // Tier 1 (20%): 3D street-level entrance portico canopy + cylindrical columns + floor belt stringcourses
+  const tier1Group = new THREE.Group();
+  const porticoW = Math.min(3.8, actualBayW * 1.15);
+  const porticoDepth = 1.65;
+  const porticoY = podiumY - 0.25;
+  const porticoX = streetWallX + outwardDir * (porticoDepth / 2);
+
+  // Projecting 3D marquee slab
+  const marqueeGeo = new THREE.BoxGeometry(porticoDepth, 0.34, porticoW);
+  marqueeGeo.translate(porticoX, porticoY, zCenter);
+  tier1Group.add(createPlotterMesh(marqueeGeo));
+
+  // Two 8-segment classical entrance columns supporting the portico
+  const colX = streetWallX + outwardDir * (porticoDepth - 0.22);
+  for (const zCol of [zCenter - porticoW * 0.42, zCenter + porticoW * 0.42]) {
+    const colGeo = new THREE.CylinderGeometry(0.14, 0.17, porticoY - 0.17, 8);
+    colGeo.translate(colX, (porticoY - 0.17) / 2, zCol);
+    tier1Group.add(
+      createPlotterMesh(colGeo, { thresholdAngle: 1, inkWeight: 'secondary' })
+    );
+  }
+
+  // Tier 2 (38%): 3D projecting facade bay pilasters + 3D rooftop wooden stave water tower
+  const tier2Group = new THREE.Group();
+  for (let b = 0; b <= numBays; b += 2) {
+    const pierZ = zCenter - usableZ / 2 + b * actualBayW;
+    const pilH = Math.max(2.0, height - podiumY - 0.6);
+    const pilGeo = new THREE.BoxGeometry(0.28, pilH, 0.26);
+    pilGeo.translate(
+      streetWallX + outwardDir * 0.14,
+      podiumY + pilH / 2,
+      pierZ
+    );
+    tier2Group.add(createPlotterMesh(pilGeo, { inkWeight: 'secondary' }));
+  }
+
+  if (seedOffset % 2 === 0 && height > 16) {
+    const wt = createWaterTower(
+      xCenter + side * (depthX * 0.18),
+      height,
+      zCenter - widthZ * 0.22,
+      38,
+      true
+    );
+    tier2Group.add(wt);
+  }
+
+  // Tier 3 (55%): 3D rooftop mechanical chiller bank with 12-segment cylindrical fan shrouds & gabled glass skylight
+  const tier3Group = new THREE.Group();
+  if (height > 14) {
+    const chillerX = xCenter - side * (depthX * 0.12);
+    const chillerZ = zCenter + widthZ * 0.18;
+    const chillerBox = new THREE.BoxGeometry(3.2, 1.5, 2.2);
+    chillerBox.translate(chillerX, height + 0.75, chillerZ);
+    tier3Group.add(createPlotterMesh(chillerBox));
+
+    // Twin 12-segment cylindrical exhaust fan cowlings on top of the chiller
+    for (const fz of [chillerZ - 0.55, chillerZ + 0.55]) {
+      const fanGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.36, 12);
+      fanGeo.translate(chillerX, height + 1.68, fz);
+      tier3Group.add(
+        createPlotterMesh(fanGeo, { thresholdAngle: 1, inkWeight: 'secondary' })
+      );
+    }
+
+    // 3D Gabled Glass Skylight Prism on roof
+    const skyX = xCenter + side * (depthX * 0.15);
+    const skyZ = zCenter;
+    const skyGeo = new THREE.ConeGeometry(1.85, 1.35, 4);
+    skyGeo.rotateY(Math.PI / 4);
+    skyGeo.scale(1.0, 1.0, 1.45);
+    skyGeo.translate(skyX, height + 0.67, skyZ);
+    tier3Group.add(createPlotterMesh(skyGeo, { thresholdAngle: 1 }));
+  }
+
+  // Tier 4 (75%): 3D rooftop parabolic microwave dish array & 3D window AC compressor units
+  const tier4Group = new THREE.Group();
+  if (height > 14) {
+    const mastX = streetWallX - outwardDir * 1.8;
+    const mastZ = zCenter + halfZ - 2.2;
+    const mastPost = new THREE.BoxGeometry(0.24, 3.4, 0.24);
+    mastPost.translate(mastX, height + 1.7, mastZ);
+    tier4Group.add(createPlotterMesh(mastPost));
+
+    // 14-segment 3D parabolic microwave dish drum facing the canyon
+    const dishGeo = new THREE.CylinderGeometry(0.88, 0.18, 0.42, 14);
+    dishGeo.rotateZ((outwardDir * Math.PI) / 2);
+    dishGeo.translate(mastX + outwardDir * 0.35, height + 2.5, mastZ);
+    tier4Group.add(createPlotterMesh(dishGeo, { thresholdAngle: 1 }));
+  }
+
   const stringcourseLines: THREE.Vector3[] = [];
-  // Tier 2 (38%): Vertical structural bay piers & pilasters between window bays
   const verticalPierLines: THREE.Vector3[] = [];
-  // Tier 3 (55%): Spandrel panel frames & roofline cornice dentil ticks
   const spandrelLines: THREE.Vector3[] = [];
-  // Tier 4 (72%): Structural cross-bracing & rooftop lattice parapet frames
   const bracingLines: THREE.Vector3[] = [];
-  // Tier 5 (88%): Fine stone ashlar coursing & corner quoin ticks
   const ashlarLines: THREE.Vector3[] = [];
 
   floors.forEach((yBot, floorIdx) => {
@@ -642,10 +746,19 @@ function addWindowsAndBalconies(
       new THREE.Vector3(sfX, yMidCourse, zCenter + halfZ)
     );
 
-    // Tier 4: Spandrel X-bracing under windows on alternating bays
+    // Tier 4: Spandrel X-bracing & 3D window AC unit boxes on selected bays
     for (let b = 0; b < numBays; b++) {
-      if ((b + floorIdx) % 2 !== 0) continue;
       const bzCenter = zCenter - usableZ / 2 + (b + 0.5) * actualBayW;
+      if ((b + floorIdx + seedOffset) % 4 === 0 && floorIdx > 0) {
+        const acGeo = new THREE.BoxGeometry(0.48, 0.38, 0.68);
+        acGeo.translate(
+          streetWallX + outwardDir * 0.24,
+          yBot + 0.22,
+          bzCenter + 0.35
+        );
+        tier4Group.add(createPlotterMesh(acGeo, { inkWeight: 'secondary' }));
+      }
+      if ((b + floorIdx) % 2 !== 0) continue;
       const wHalf = Math.min(0.88, actualBayW * 0.34);
       const spBot = yBot - 0.85;
       const spTop = yBot - 0.22;
@@ -687,19 +800,29 @@ function addWindowsAndBalconies(
     );
   }
 
-  const addPointsTier = (pts: THREE.Vector3[], threshold: number, weight: 'primary' | 'secondary' = 'secondary') => {
-    if (pts.length === 0) return;
-    const segs = createPlotterSegments(pts, weight);
-    segs.userData.pointsThreshold = threshold;
-    segs.userData.alwaysVisibleInSobel = true;
-    building.add(segs);
-  };
+  if (stringcourseLines.length > 0) {
+    tier1Group.add(createPlotterSegments(stringcourseLines, 'secondary'));
+  }
+  if (verticalPierLines.length > 0) {
+    tier2Group.add(createPlotterSegments(verticalPierLines, 'secondary'));
+  }
+  if (spandrelLines.length > 0) {
+    tier3Group.add(createPlotterSegments(spandrelLines, 'secondary'));
+  }
+  if (bracingLines.length > 0) {
+    tier4Group.add(createPlotterSegments(bracingLines, 'secondary'));
+  }
 
-  addPointsTier(stringcourseLines, 20, 'secondary');
-  addPointsTier(verticalPierLines, 38, 'secondary');
-  addPointsTier(spandrelLines, 55, 'secondary');
-  addPointsTier(bracingLines, 72, 'secondary');
-  addPointsTier(ashlarLines, 88, 'secondary');
+  building.add(tagObjectDetail(tier1Group, 20));
+  building.add(tagObjectDetail(tier2Group, 38));
+  building.add(tagObjectDetail(tier3Group, 55));
+  building.add(tagObjectDetail(tier4Group, 75));
+
+  if (ashlarLines.length > 0) {
+    building.add(
+      tagObjectDetail(createPlotterSegments(ashlarLines, 'secondary'), 88)
+    );
+  }
 }
 
 function createBuildingFromSpec(
@@ -1127,29 +1250,40 @@ export function applyBuildingDetailLevel(
   buildingsGroup: THREE.Group,
   params: BuildingDetailParams
 ): void {
+  const pd =
+    typeof params.pointsDensity === 'number' ? params.pointsDensity : 25;
+
   buildingsGroup.traverse((obj) => {
+    let hasTag = false;
+    let vis = true;
+
     if (typeof obj.userData.windowThreshold === 'number') {
-      const vis =
+      hasTag = true;
+      vis =
+        vis &&
         params.windowDensity > 0 &&
         obj.userData.windowThreshold <= params.windowDensity;
-      obj.visible = vis;
-      obj.userData.hiddenByDetail = !vis;
-    } else if (typeof obj.userData.balconyThreshold === 'number') {
-      const vis =
+    }
+    if (typeof obj.userData.balconyThreshold === 'number') {
+      hasTag = true;
+      vis =
+        vis &&
         params.balconyDensity > 0 &&
         obj.userData.balconyThreshold <= params.balconyDensity;
-      obj.visible = vis;
-      obj.userData.hiddenByDetail = !vis;
-    } else if (typeof obj.userData.detailThreshold === 'number') {
-      const vis =
+    }
+    if (typeof obj.userData.detailThreshold === 'number') {
+      hasTag = true;
+      vis =
+        vis &&
         params.buildingDetail > 0 &&
         obj.userData.detailThreshold <= params.buildingDetail;
-      obj.visible = vis;
-      obj.userData.hiddenByDetail = !vis;
-    } else if (typeof obj.userData.pointsThreshold === 'number') {
-      const pd =
-        typeof params.pointsDensity === 'number' ? params.pointsDensity : 25;
-      const vis = pd > 0 && obj.userData.pointsThreshold <= pd;
+    }
+    if (typeof obj.userData.pointsThreshold === 'number') {
+      hasTag = true;
+      vis = vis && pd > 0 && obj.userData.pointsThreshold <= pd;
+    }
+
+    if (hasTag) {
       obj.visible = vis;
       obj.userData.hiddenByDetail = !vis;
     }

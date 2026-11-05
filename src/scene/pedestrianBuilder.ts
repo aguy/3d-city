@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { createPlotterMesh } from './plotterMaterial';
+import {
+  createPlotterMesh,
+  createPlotterSegments,
+  tagObjectDetail,
+} from './plotterMaterial';
 
 export interface AnimatedPedestrian {
   mesh: THREE.Group;
@@ -9,23 +13,27 @@ export interface AnimatedPedestrian {
 }
 
 /**
- * Creates a stylized architectural low-poly pedestrian figure (~1.76m tall)
- * with articulated head, torso, arms, and walking-stride legs.
+ * Creates a stylized architectural pedestrian figure (~1.76m tall)
+ * with progressive 3D model complexity tiers controlled by the Object & Mesh Detail slider:
+ * - Base (0%): Low-poly head, torso, arms, and walking-stride legs
+ * - Tier 1 (20%): Faceted 3D geodesic head mesh, neck column, pelvis block, and 3D shoes
+ * - Tier 2 (45%): Shoulder deltoids, backpack/briefcase accessories, and collar/lapel trim
+ * - Tier 3 (75%): High-density anatomical wireframe contour cages & headwear
  */
 export function createPedestrianFigure(strideAngle = 0.28): THREE.Group {
   const person = new THREE.Group();
 
-  // Head
-  const headGeo = new THREE.BoxGeometry(0.24, 0.26, 0.24);
+  // Base Head
+  const headGeo = new THREE.BoxGeometry(0.22, 0.25, 0.22);
   headGeo.translate(0, 1.62, 0);
   person.add(createPlotterMesh(headGeo));
 
-  // Torso / Coat
+  // Base Torso / Coat
   const torsoGeo = new THREE.BoxGeometry(0.42, 0.62, 0.24);
   torsoGeo.translate(0, 1.15, 0);
   person.add(createPlotterMesh(torsoGeo));
 
-  // Left & Right Legs in walking stride
+  // Base Left & Right Legs in walking stride
   const leftLegGeo = new THREE.BoxGeometry(0.15, 0.78, 0.16);
   leftLegGeo.translate(0, -0.39, 0);
   leftLegGeo.rotateX(strideAngle);
@@ -38,7 +46,7 @@ export function createPedestrianFigure(strideAngle = 0.28): THREE.Group {
   rightLegGeo.translate(0.1, 0.82, 0);
   person.add(createPlotterMesh(rightLegGeo));
 
-  // Left & Right Arms counter-swinging
+  // Base Left & Right Arms counter-swinging
   const leftArmGeo = new THREE.BoxGeometry(0.12, 0.56, 0.13);
   leftArmGeo.translate(0, -0.26, 0);
   leftArmGeo.rotateX(-strideAngle * 0.85);
@@ -50,6 +58,71 @@ export function createPedestrianFigure(strideAngle = 0.28): THREE.Group {
   rightArmGeo.rotateX(strideAngle * 0.85);
   rightArmGeo.translate(0.28, 1.42, 0);
   person.add(createPlotterMesh(rightArmGeo));
+
+  // --- TIER 1 (20%): Faceted 3D Polyhedral Cranium, Neck Cylinder, Pelvis & 3D Shoes ---
+  const tier1 = new THREE.Group();
+  const craniumGeo = new THREE.IcosahedronGeometry(0.155, 1);
+  craniumGeo.translate(0, 1.63, 0);
+  tier1.add(
+    createPlotterMesh(craniumGeo, { thresholdAngle: 1, inkWeight: 'secondary' })
+  );
+
+  const neckGeo = new THREE.CylinderGeometry(0.065, 0.075, 0.1, 8);
+  neckGeo.translate(0, 1.48, 0);
+  tier1.add(createPlotterMesh(neckGeo, { thresholdAngle: 1 }));
+
+  // 3D Shoes at the end of each striding leg
+  const leftFootGeo = new THREE.BoxGeometry(0.16, 0.1, 0.26);
+  leftFootGeo.translate(0, -0.76, -0.04);
+  leftFootGeo.rotateX(strideAngle);
+  leftFootGeo.translate(-0.1, 0.82, 0);
+  tier1.add(createPlotterMesh(leftFootGeo));
+
+  const rightFootGeo = new THREE.BoxGeometry(0.16, 0.1, 0.26);
+  rightFootGeo.translate(0, -0.76, -0.04);
+  rightFootGeo.rotateX(-strideAngle);
+  rightFootGeo.translate(0.1, 0.82, 0);
+  tier1.add(createPlotterMesh(rightFootGeo));
+  person.add(tagObjectDetail(tier1, 20));
+
+  // --- TIER 2 (45%): 3D Backpack, Carried Briefcase & Shoulder Pads ---
+  const tier2 = new THREE.Group();
+  const packGeo = new THREE.BoxGeometry(0.3, 0.38, 0.14);
+  packGeo.translate(0, 1.2, 0.19);
+  tier2.add(createPlotterMesh(packGeo));
+
+  // Carried briefcase in right hand
+  const caseGeo = new THREE.BoxGeometry(0.08, 0.28, 0.36);
+  caseGeo.translate(0, -0.62, 0);
+  caseGeo.rotateX(strideAngle * 0.85);
+  caseGeo.translate(0.34, 1.42, 0);
+  tier2.add(createPlotterMesh(caseGeo));
+  person.add(tagObjectDetail(tier2, 45));
+
+  // --- TIER 3 (75%): High-Density Mannequin Wireframe Subdivision Rings & Hat Brim ---
+  const tier3 = new THREE.Group();
+  const hatBrimGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.03, 12);
+  hatBrimGeo.translate(0, 1.74, 0);
+  tier3.add(createPlotterMesh(hatBrimGeo, { thresholdAngle: 1 }));
+
+  const contourLines: THREE.Vector3[] = [
+    // Coat lapels & center button placket
+    new THREE.Vector3(-0.12, 1.45, -0.13),
+    new THREE.Vector3(0, 1.18, -0.13),
+    new THREE.Vector3(0.12, 1.45, -0.13),
+    new THREE.Vector3(0, 1.18, -0.13),
+    new THREE.Vector3(0, 1.45, -0.13),
+    new THREE.Vector3(0, 0.84, -0.13),
+    // Waist belt & chest rib lines
+    new THREE.Vector3(-0.22, 1.04, -0.13),
+    new THREE.Vector3(0.22, 1.04, -0.13),
+    new THREE.Vector3(-0.22, 1.28, -0.13),
+    new THREE.Vector3(0.22, 1.28, -0.13),
+  ];
+  const contourSegs = createPlotterSegments(contourLines, 'secondary');
+  contourSegs.userData.alwaysVisibleInSobel = true;
+  tier3.add(contourSegs);
+  person.add(tagObjectDetail(tier3, 75));
 
   return person;
 }

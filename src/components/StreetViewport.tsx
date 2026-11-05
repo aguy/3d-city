@@ -23,10 +23,6 @@ import {
   applyBuildingDetailLevel,
   buildBuildingsScene,
 } from '../scene/buildingBuilder';
-import {
-  buildCityPointCloud,
-  updatePointCloudDensity,
-} from '../scene/pointsBuilder';
 import { buildVehiclesScene, updateVehicles } from '../scene/vehicleBuilder';
 import {
   buildPedestriansScene,
@@ -148,18 +144,11 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     let animatedPedestrians = pScene.animatedPedestrians;
     const targetReticle = createTargetReticle();
     const transitionVisualizerGroup = createTransitionVisualizerGroup();
-    let pointsGroup = buildCityPointCloud({
-      road: roadGroup,
-      buildings: buildingsGroup,
-      vehicles: vehiclesGroup,
-      pedestrians: pedestriansGroup,
-    });
 
     scene.add(roadGroup);
     scene.add(buildingsGroup);
     scene.add(vehiclesGroup);
     scene.add(pedestriansGroup);
-    scene.add(pointsGroup);
     scene.add(targetReticle);
     scene.add(transitionVisualizerGroup);
 
@@ -186,7 +175,6 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
           obj.userData.hiddenByDetail = !vis;
         }
       });
-      updatePointCloudDensity(pointsGroup, pd);
     };
 
     applyBuildingDetailLevel(buildingsGroup, {
@@ -246,8 +234,6 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
         scene.remove(buildingsGroup);
         scene.remove(vehiclesGroup);
         scene.remove(pedestriansGroup);
-        scene.remove(pointsGroup);
-        pointsGroup.geometry.dispose();
 
         roadGroup = buildRoadScene(currentDescriptor);
         buildingsGroup = buildBuildingsScene(currentDescriptor);
@@ -260,18 +246,10 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
         pedestriansGroup = pScene.group;
         animatedPedestrians = pScene.animatedPedestrians;
 
-        pointsGroup = buildCityPointCloud({
-          road: roadGroup,
-          buildings: buildingsGroup,
-          vehicles: vehiclesGroup,
-          pedestrians: pedestriansGroup,
-        });
-
         scene.add(roadGroup);
         scene.add(buildingsGroup);
         scene.add(vehiclesGroup);
         scene.add(pedestriansGroup);
-        scene.add(pointsGroup);
 
         const currentPointsDensity =
           currentParams.pointsDensity ?? DEFAULT_CAMERA_PARAMS.pointsDensity;
@@ -402,7 +380,6 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     return () => {
       cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
-      pointsGroup.geometry.dispose();
       renderer.dispose();
     };
   }, []);
@@ -433,7 +410,7 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
         </span>
         <span className="hud-tag">
           PAPER: {params.paperTheme.toUpperCase()} · HATCH:{' '}
-          {params.hatchDensity}% · STIPPLE: {params.stippleShade}% · POINTS:{' '}
+          {params.hatchDensity}% · STIPPLE: {params.stippleShade}% · DETAIL:{' '}
           {params.pointsDensity}%
         </span>
         {(params.lensCurvature !== 0 || params.orthoBlend > 0) && (

@@ -173,7 +173,7 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
 
     buildingFolder
       .addBinding(state, 'pointsDensity', {
-        label: 'Object & points %',
+        label: 'Object details %',
         min: 0,
         max: 100,
         step: 1,

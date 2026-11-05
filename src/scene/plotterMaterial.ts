@@ -626,6 +626,21 @@ export function createPlotterSegments(
 }
 
 /**
+ * Tags a 3D object and all of its descendant meshes/segments with a progressive
+ * `pointsThreshold` (0..100) controlled by the Object & Mesh Detail slider.
+ */
+export function tagObjectDetail<T extends THREE.Object3D>(
+  obj: T,
+  threshold: number
+): T {
+  obj.userData.pointsThreshold = threshold;
+  obj.traverse((child) => {
+    child.userData.pointsThreshold = threshold;
+  });
+  return obj;
+}
+
+/**
  * Creates a 3D wireframe target reticle on the street surface to visualize the `Look ahead m` target point.
  */
 export function createTargetReticle(): THREE.Group {
