@@ -13,7 +13,10 @@ export interface PaperThemePalette {
   secondaryInkHex: number;
   accentInkHex: number;
   secondPenHex: number;
+  gradientHorizonHex: number;
+  gradientZenithHex: number;
   cssPaperBg: string;
+  cssGradientBg: string;
   cssSidebarBg: string;
   cssInkBlack: string;
   cssInkMuted: string;
@@ -30,7 +33,11 @@ export const PAPER_THEME_PALETTES: Record<PaperTheme, PaperThemePalette> = {
     secondaryInkHex: 0x333333,
     accentInkHex: 0x1a1a1a,
     secondPenHex: 0xc8321e,
+    gradientHorizonHex: 0xf6c28b,
+    gradientZenithHex: 0xd97b73,
     cssPaperBg: '#f8f6f0',
+    cssGradientBg:
+      'linear-gradient(180deg, #d97b73 0%, #f6c28b 46%, #f8f6f0 90%)',
     cssSidebarBg: '#f1efe8',
     cssInkBlack: '#121212',
     cssInkMuted: '#52524e',
@@ -45,7 +52,11 @@ export const PAPER_THEME_PALETTES: Record<PaperTheme, PaperThemePalette> = {
     secondaryInkHex: 0x8cc9f8,
     accentInkHex: 0xffffff,
     secondPenHex: 0xffcc4d,
+    gradientHorizonHex: 0x1f6fb2,
+    gradientZenithHex: 0x5b2c82,
     cssPaperBg: '#0d2b4e',
+    cssGradientBg:
+      'linear-gradient(180deg, #5b2c82 0%, #1f6fb2 48%, #0d2b4e 90%)',
     cssSidebarBg: '#f1efe8',
     cssInkBlack: '#121212',
     cssInkMuted: '#52524e',
@@ -60,7 +71,11 @@ export const PAPER_THEME_PALETTES: Record<PaperTheme, PaperThemePalette> = {
     secondaryInkHex: 0x29a656,
     accentInkHex: 0xa2ffbe,
     secondPenHex: 0xffb340,
+    gradientHorizonHex: 0x14524b,
+    gradientZenithHex: 0x3b1d5e,
     cssPaperBg: '#0f1412',
+    cssGradientBg:
+      'linear-gradient(180deg, #3b1d5e 0%, #14524b 48%, #0f1412 90%)',
     cssSidebarBg: '#f1efe8',
     cssInkBlack: '#121212',
     cssInkMuted: '#52524e',
@@ -75,7 +90,11 @@ export const PAPER_THEME_PALETTES: Record<PaperTheme, PaperThemePalette> = {
     secondaryInkHex: 0x5c422c,
     accentInkHex: 0x1d120a,
     secondPenHex: 0xa83820,
+    gradientHorizonHex: 0xe6ad68,
+    gradientZenithHex: 0xc4684b,
     cssPaperBg: '#f3ead8',
+    cssGradientBg:
+      'linear-gradient(180deg, #c4684b 0%, #e6ad68 46%, #f3ead8 90%)',
     cssSidebarBg: '#efe5d2',
     cssInkBlack: '#2b1d12',
     cssInkMuted: '#634d3a',
@@ -101,9 +120,12 @@ export const plotterStyleUniforms = {
   uLensCurvature: { value: 0.0 },
   uPointsDensity: { value: 0.25 },
   uPointSize: { value: 3.5 },
+  uDistantGradient: { value: 0.0 },
   uInkColor: { value: new THREE.Color(0x111111) },
   uPaperColor: { value: new THREE.Color(0xfaf8f2) },
   uSecondPenColor: { value: new THREE.Color(0xc8321e) },
+  uGradientHorizonColor: { value: new THREE.Color(0xf6c28b) },
+  uGradientZenithColor: { value: new THREE.Color(0xd97b73) },
 };
 
 const VERTEX_PREAMBLE = /* glsl */ `
@@ -152,13 +174,18 @@ function bindCommonUniforms(shader: THREE.WebGLProgramParametersWithUniforms) {
   shader.uniforms.uDepthTaper = plotterStyleUniforms.uDepthTaper;
   shader.uniforms.uInkDropout = plotterStyleUniforms.uInkDropout;
   shader.uniforms.uInkPooling = plotterStyleUniforms.uInkPooling;
+  shader.uniforms.uDistantGradient = plotterStyleUniforms.uDistantGradient;
   shader.uniforms.uInkColor = plotterStyleUniforms.uInkColor;
   shader.uniforms.uPaperColor = plotterStyleUniforms.uPaperColor;
+  shader.uniforms.uGradientHorizonColor =
+    plotterStyleUniforms.uGradientHorizonColor;
+  shader.uniforms.uGradientZenithColor =
+    plotterStyleUniforms.uGradientZenithColor;
 }
 
 /**
- * Attaches vertex jitter, curvilinear lens distortion, and 3D surface cross-hatching / stippling
- * to occluder meshes.
+ * Attaches vertex jitter, curvilinear lens distortion, distant atmospheric gradient,
+ * and 3D surface cross-hatching / stippling to occluder meshes.
  */
 function attachOccluderShader(material: THREE.Material): void {
   material.onBeforeCompile = (shader) => {
@@ -173,7 +200,10 @@ function attachOccluderShader(material: THREE.Material): void {
       /* glsl */ `
       uniform float uHatchDensity;
       uniform float uStippleShade;
+      uniform float uDistantGradient;
       uniform vec3 uInkColor;
+      uniform vec3 uGradientHorizonColor;
+      uniform vec3 uGradientZenithColor;
       varying vec3 vPlotterWorldPos;
       varying float vPlotterViewDepth;
 
@@ -188,6 +218,12 @@ function attachOccluderShader(material: THREE.Material): void {
       '#include <dithering_fragment>',
       /* glsl */ `
       #include <dithering_fragment>
+      if (uDistantGradient > 0.5) {
+        float distFactor = smoothstep(42.0, 220.0, vPlotterViewDepth);
+        float heightMix = clamp((vPlotterWorldPos.y / 68.0) * 0.55 + distFactor * 0.45, 0.0, 1.0);
+        vec3 distantGradRgb = mix(uGradientHorizonColor, uGradientZenithColor, heightMix);
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, distantGradRgb, distFactor * 0.82);
+      }
       if (uHatchDensity > 0.001 || uStippleShade > 0.001) {
         vec3 dx = dFdx(vPlotterWorldPos);
         vec3 dy = dFdy(vPlotterWorldPos);
@@ -551,6 +587,15 @@ export function applyPlotterEffects(
   plotterStyleUniforms.uPaperColor.value.setHex(palette.paperBgHex);
   plotterStyleUniforms.uInkColor.value.setHex(palette.primaryInkHex);
   plotterStyleUniforms.uSecondPenColor.value.setHex(palette.secondPenHex);
+  plotterStyleUniforms.uDistantGradient.value = merged.distantGradient
+    ? 1.0
+    : 0.0;
+  plotterStyleUniforms.uGradientHorizonColor.value.setHex(
+    palette.gradientHorizonHex
+  );
+  plotterStyleUniforms.uGradientZenithColor.value.setHex(
+    palette.gradientZenithHex
+  );
 
   return palette;
 }

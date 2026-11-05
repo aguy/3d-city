@@ -282,6 +282,7 @@ describe('Plotter Scene & Asset Builders', () => {
       dofBlur: 55,
       penMisregistration: 4.2,
       paperTheme: 'blueprint',
+      distantGradient: true,
       lensCurvature: -60,
       orthoBlend: 100,
       lookAhead: 95,
@@ -302,11 +303,18 @@ describe('Plotter Scene & Asset Builders', () => {
     expect(plotterStyleUniforms.uPenMisregistration.value).toBeCloseTo(4.2, 4);
     expect(plotterStyleUniforms.uLensCurvature.value).toBeCloseTo(-0.6, 4);
     expect(plotterStyleUniforms.uPointsDensity.value).toBeCloseTo(0.7, 4);
+    expect(plotterStyleUniforms.uDistantGradient.value).toBe(1.0);
     expect(plotterStyleUniforms.uPaperColor.value.getHex()).toBe(
       PAPER_THEME_PALETTES.blueprint.paperBgHex
     );
     expect(plotterStyleUniforms.uInkColor.value.getHex()).toBe(
       PAPER_THEME_PALETTES.blueprint.primaryInkHex
+    );
+    expect(plotterStyleUniforms.uGradientHorizonColor.value.getHex()).toBe(
+      PAPER_THEME_PALETTES.blueprint.gradientHorizonHex
+    );
+    expect(plotterStyleUniforms.uGradientZenithColor.value.getHex()).toBe(
+      PAPER_THEME_PALETTES.blueprint.gradientZenithHex
     );
 
     // Verify orthoBlend interpolates camera projectionMatrix toward orthographic

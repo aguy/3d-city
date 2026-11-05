@@ -80,6 +80,8 @@ export interface CameraParameters {
   penMisregistration: number;
   /** Drafting paper & ink palette theme */
   paperTheme: PaperTheme;
+  /** Render a colored atmospheric gradient in the distant background & sky */
+  distantGradient: boolean;
   /** Curvilinear / fisheye barrel lens curvature % (-100..100) */
   lensCurvature: number;
   /** Perspective-to-Orthographic axonometric projection blend % (0..100) */
@@ -134,6 +136,7 @@ export const DEFAULT_CAMERA_PARAMS: CameraParameters = {
   dofBlur: 0,
   penMisregistration: 0,
   paperTheme: 'cream',
+  distantGradient: false,
   lensCurvature: 0,
   orthoBlend: 0,
   renderMode: 'edges-occluded',

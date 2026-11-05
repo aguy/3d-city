@@ -28,9 +28,12 @@ export const PlotterSobelShader = {
     uDofBlur: { value: 0.0 },
     uFocalDistance: { value: 65.0 },
     uPenMisregistration: { value: 0.0 },
+    uDistantGradient: { value: 0.0 },
     uPaperColor: { value: new THREE.Color(0xfaf8f2) },
     uInkColor: { value: new THREE.Color(0x111111) },
     uSecondPenColor: { value: new THREE.Color(0xc8321e) },
+    uGradientHorizonColor: { value: new THREE.Color(0xf6c28b) },
+    uGradientZenithColor: { value: new THREE.Color(0xd97b73) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -55,9 +58,12 @@ export const PlotterSobelShader = {
     uniform float uDofBlur;
     uniform float uFocalDistance;
     uniform float uPenMisregistration;
+    uniform float uDistantGradient;
     uniform vec3 uPaperColor;
     uniform vec3 uInkColor;
     uniform vec3 uSecondPenColor;
+    uniform vec3 uGradientHorizonColor;
+    uniform vec3 uGradientZenithColor;
     varying vec2 vUv;
 
     float hash12(vec2 p) {
@@ -66,13 +72,21 @@ export const PlotterSobelShader = {
       return fract((p3.x + p3.y) * p3.z);
     }
 
-    // Theme-independent ink extraction (works for both dark-on-light and light-on-dark themes)
+    // Theme-independent ink extraction (works for both dark-on-light and light-on-dark themes,
+    // and ignores distant background gradient tints on occluder surfaces)
     float extractInk(vec4 c) {
       if (c.a < 0.03) return 0.0;
       float dPaper = length(c.rgb - uPaperColor);
+      if (uDistantGradient > 0.5) {
+        vec3 gMid = mix(uGradientHorizonColor, uGradientZenithColor, 0.5);
+        dPaper = min(dPaper, length(c.rgb - uGradientHorizonColor));
+        dPaper = min(dPaper, length(c.rgb - uGradientZenithColor));
+        dPaper = min(dPaper, length(c.rgb - gMid));
+        dPaper = min(dPaper, length(c.rgb - mix(uPaperColor, gMid, 0.5)));
+      }
       float dInk = length(c.rgb - uInkColor);
       float ratio = clamp(dPaper / max(0.05, dPaper + dInk), 0.0, 1.0);
-      return c.a * smoothstep(0.08, 0.55, ratio);
+      return c.a * smoothstep(0.12, 0.58, ratio);
     }
 
     // Evaluates Sobel edge intensity at a given UV coordinate (used in uMode = 1.0)
@@ -279,6 +293,10 @@ export const PlotterSobelShader = {
       }
 
       vec3 surfaceRgb = (uMode < 0.5 && baseSample.a > 0.05) ? baseSample.rgb : uPaperColor;
+      if (uMode > 0.5 && uDistantGradient > 0.5 && baseSample.a > 0.05) {
+        vec3 gradRgb = mix(uGradientHorizonColor, uGradientZenithColor, smoothstep(0.35, 0.95, uv.y));
+        surfaceRgb = mix(surfaceRgb, gradRgb, horizonProximity * 0.78);
+      }
       vec3 compositedRgb = mix(surfaceRgb, uSecondPenColor, clamp(secondPenInk, 0.0, 1.0));
       compositedRgb = mix(compositedRgb, uInkColor, clamp(strokeInk, 0.0, 1.0));
 
@@ -393,10 +411,19 @@ export function createSobelPipeline(
       0.0,
       8.0
     );
+    sobelPass.uniforms.uDistantGradient.value = merged.distantGradient
+      ? 1.0
+      : 0.0;
 
     sobelPass.uniforms.uPaperColor.value.setHex(palette.paperBgHex);
     sobelPass.uniforms.uInkColor.value.setHex(palette.primaryInkHex);
     sobelPass.uniforms.uSecondPenColor.value.setHex(palette.secondPenHex);
+    sobelPass.uniforms.uGradientHorizonColor.value.setHex(
+      palette.gradientHorizonHex
+    );
+    sobelPass.uniforms.uGradientZenithColor.value.setHex(
+      palette.gradientZenithHex
+    );
   };
 
   return { composer, sobelPass, setSize, setStyleUniforms };

@@ -297,6 +297,12 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
       .on('change', notifyChange);
 
     styleFolder
+      .addBinding(state, 'distantGradient', {
+        label: 'Distant gradient',
+      })
+      .on('change', notifyChange);
+
+    styleFolder
       .addBinding(state, 'showTargetMarker', {
         label: 'Target reticle',
       })
@@ -418,6 +424,7 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
         renderMode: state.renderMode,
         animateScene: state.animateScene,
         showTargetMarker: state.showTargetMarker,
+        distantGradient: state.distantGradient,
         lineWeight: state.lineWeight,
         lineJitter: state.lineJitter,
       });

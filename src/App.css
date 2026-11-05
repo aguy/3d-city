@@ -222,13 +222,20 @@ body,
     ),
     linear-gradient(to bottom, var(--grid-major) 1px, transparent 1px),
     linear-gradient(to right, var(--grid-minor) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-minor) 1px, transparent 1px);
+    linear-gradient(to bottom, var(--grid-minor) 1px, transparent 1px),
+    var(--sky-gradient, none);
   background-size:
     60px 60px,
     60px 60px,
     12px 12px,
-    12px 12px;
-  background-position: -1px -1px;
+    12px 12px,
+    100% 100%;
+  background-position:
+    -1px -1px,
+    -1px -1px,
+    -1px -1px,
+    -1px -1px,
+    0 0;
 }
 
 .viewport-canvas-container {

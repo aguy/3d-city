@@ -391,6 +391,7 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     '--paper-bg': palette.cssPaperBg,
     '--grid-minor': palette.cssGridMinor,
     '--grid-major': palette.cssGridMajor,
+    '--sky-gradient': params.distantGradient ? palette.cssGradientBg : 'none',
   } as React.CSSProperties;
 
   return (
