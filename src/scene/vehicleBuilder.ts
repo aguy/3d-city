@@ -20,6 +20,19 @@ function addWheel(
   wheelGeo.rotateZ(Math.PI / 2);
   wheelGeo.translate(x, y, z);
   group.add(createPlotterMesh(wheelGeo, { thresholdAngle: 12 }));
+
+  // Wheel rim spoke micro-detail (outer face hub cross)
+  const outerX = x + Math.sign(x) * (width / 2 + 0.01);
+  const r = radius * 0.6;
+  const spokeLines: THREE.Vector3[] = [
+    new THREE.Vector3(outerX, y - r, z),
+    new THREE.Vector3(outerX, y + r, z),
+    new THREE.Vector3(outerX, y, z - r),
+    new THREE.Vector3(outerX, y, z + r),
+  ];
+  const spokeSegs = createPlotterSegments(spokeLines, 'secondary');
+  spokeSegs.userData.pointsThreshold = 30;
+  group.add(spokeSegs);
 }
 
 export function createCarModel(): THREE.Group {
@@ -62,6 +75,21 @@ export function createCarModel(): THREE.Group {
   addWheel(car, 0.88, 0.35, -1.35, 0.35, 0.24);
   addWheel(car, -0.88, 0.35, 1.35, 0.35, 0.24);
   addWheel(car, 0.88, 0.35, 1.35, 0.35, 0.24);
+
+  // Front grille and headlights micro-detail
+  const frontDetails: THREE.Vector3[] = [
+    new THREE.Vector3(-0.75, 0.58, -2.26),
+    new THREE.Vector3(-0.45, 0.58, -2.26),
+    new THREE.Vector3(0.45, 0.58, -2.26),
+    new THREE.Vector3(0.75, 0.58, -2.26),
+    new THREE.Vector3(-0.35, 0.52, -2.26),
+    new THREE.Vector3(0.35, 0.52, -2.26),
+    new THREE.Vector3(-0.35, 0.44, -2.26),
+    new THREE.Vector3(0.35, 0.44, -2.26),
+  ];
+  const frontSegs = createPlotterSegments(frontDetails, 'secondary');
+  frontSegs.userData.pointsThreshold = 40;
+  car.add(frontSegs);
 
   return car;
 }

@@ -73,6 +73,7 @@ export interface SceneDescriptor {
     windowDensity: number;
     balconyDensity: number;
     buildingDetail: number;
+    pointsDensity?: number;
   };
   recommendedCamera: Partial<CameraParameters>;
 }

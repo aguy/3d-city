@@ -29,6 +29,15 @@ function createStreetLamp(side: -1 | 1, z: number, offsetDist = 8.4): THREE.Grou
   headGeo.translate(poleX - side * armLength, 6.42, z);
   lamp.add(createPlotterMesh(headGeo, { inkWeight: 'primary' }));
 
+  // Diagonal support strut (micro-detail)
+  const strutLines: THREE.Vector3[] = [
+    new THREE.Vector3(poleX, 5.2, z),
+    new THREE.Vector3(poleX - side * 1.2, 6.42, z),
+  ];
+  const strutSegs = createPlotterSegments(strutLines, 'secondary');
+  strutSegs.userData.pointsThreshold = 30;
+  lamp.add(strutSegs);
+
   return lamp;
 }
 
@@ -189,6 +198,102 @@ export function buildRoadScene(descriptor?: SceneDescriptor): THREE.Group {
       );
 
       roadGroup.add(createPlotterSegments(primaryMarkings, 'primary'));
+    }
+
+    // Micro-detail: Sidewalk flagstone paving cuts
+    const flagstoneLines: THREE.Vector3[] = [];
+    for (let z = Z_START; z >= Z_END; z -= 2.5) {
+      for (const side of [-1, 1] as const) {
+        const swMinX = side * halfStreetW;
+        const swMaxX = side * (halfStreetW + sidewalkW);
+        flagstoneLines.push(
+          new THREE.Vector3(swMinX, 0.23, z),
+          new THREE.Vector3(swMaxX, 0.23, z)
+        );
+      }
+    }
+    for (const side of [-1, 1] as const) {
+      const swMidX = side * (halfStreetW + sidewalkW * 0.5);
+      flagstoneLines.push(
+        new THREE.Vector3(swMidX, 0.23, Z_START),
+        new THREE.Vector3(swMidX, 0.23, Z_END)
+      );
+    }
+    const flagstoneSegs = createPlotterSegments(flagstoneLines, 'secondary');
+    flagstoneSegs.userData.pointsThreshold = 25;
+    roadGroup.add(flagstoneSegs);
+
+    // Micro-detail: Crosswalk zebra crossings at intersections
+    if (!isNarrowAlley) {
+      const crosswalkLines: THREE.Vector3[] = [];
+      for (const iz of INTERSECTION_Z) {
+        for (let offset = -2.4; offset <= 2.4; offset += 0.8) {
+          crosswalkLines.push(
+            new THREE.Vector3(-halfStreetW + 0.5, 0.115, iz + offset),
+            new THREE.Vector3(halfStreetW - 0.5, 0.115, iz + offset)
+          );
+        }
+      }
+      const crosswalkSegs = createPlotterSegments(crosswalkLines, 'secondary');
+      crosswalkSegs.userData.pointsThreshold = 20;
+      roadGroup.add(crosswalkSegs);
+
+      // Micro-detail: Storm drain inlet grates along curb gutters
+      const drainLines: THREE.Vector3[] = [];
+      for (let z = Z_START - 15; z >= Z_END + 15; z -= 22) {
+        for (const side of [-1, 1] as const) {
+          const gx = side * (halfStreetW - 0.5);
+          const gz = z;
+          drainLines.push(
+            new THREE.Vector3(gx - 0.35, 0.112, gz - 0.6),
+            new THREE.Vector3(gx + 0.35, 0.112, gz - 0.6),
+            new THREE.Vector3(gx + 0.35, 0.112, gz - 0.6),
+            new THREE.Vector3(gx + 0.35, 0.112, gz + 0.6),
+            new THREE.Vector3(gx + 0.35, 0.112, gz + 0.6),
+            new THREE.Vector3(gx - 0.35, 0.112, gz + 0.6),
+            new THREE.Vector3(gx - 0.35, 0.112, gz + 0.6),
+            new THREE.Vector3(gx - 0.35, 0.112, gz - 0.6)
+          );
+          for (let b = -0.3; b <= 0.3; b += 0.25) {
+            drainLines.push(
+              new THREE.Vector3(gx - 0.3, 0.112, gz + b),
+              new THREE.Vector3(gx + 0.3, 0.112, gz + b)
+            );
+          }
+        }
+      }
+      const drainSegs = createPlotterSegments(drainLines, 'secondary');
+      drainSegs.userData.pointsThreshold = 35;
+      roadGroup.add(drainSegs);
+
+      // Micro-detail: Corner bollards protecting sidewalk corners at intersections
+      const bollardLines: THREE.Vector3[] = [];
+      for (const iz of INTERSECTION_Z) {
+        for (const side of [-1, 1] as const) {
+          for (const zOffset of [-4.5, 4.5]) {
+            const bx = side * (halfStreetW + 0.35);
+            const bz = iz + zOffset;
+            bollardLines.push(
+              new THREE.Vector3(bx - 0.08, 0.23, bz - 0.08),
+              new THREE.Vector3(bx - 0.08, 1.05, bz - 0.08),
+              new THREE.Vector3(bx + 0.08, 0.23, bz - 0.08),
+              new THREE.Vector3(bx + 0.08, 1.05, bz - 0.08),
+              new THREE.Vector3(bx + 0.08, 0.23, bz + 0.08),
+              new THREE.Vector3(bx + 0.08, 1.05, bz + 0.08),
+              new THREE.Vector3(bx - 0.08, 0.23, bz + 0.08),
+              new THREE.Vector3(bx - 0.08, 1.05, bz + 0.08),
+              // Cap
+              new THREE.Vector3(bx - 0.08, 1.05, bz - 0.08),
+              new THREE.Vector3(bx + 0.08, 1.05, bz - 0.08),
+              new THREE.Vector3(bx + 0.08, 1.05, bz + 0.08),
+              new THREE.Vector3(bx - 0.08, 1.05, bz + 0.08)
+            );
+          }
+        }
+      }
+      const bollardSegs = createPlotterSegments(bollardLines, 'primary');
+      bollardSegs.userData.pointsThreshold = 50;
+      roadGroup.add(bollardSegs);
     }
   }
 

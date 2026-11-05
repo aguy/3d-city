@@ -99,6 +99,8 @@ export const plotterStyleUniforms = {
   uFocalDistance: { value: 65.0 },
   uPenMisregistration: { value: 0.0 },
   uLensCurvature: { value: 0.0 },
+  uPointsDensity: { value: 0.25 },
+  uPointSize: { value: 3.5 },
   uInkColor: { value: new THREE.Color(0x111111) },
   uPaperColor: { value: new THREE.Color(0xfaf8f2) },
   uSecondPenColor: { value: new THREE.Color(0xc8321e) },
@@ -336,6 +338,95 @@ const sharedAccentEdgeMaterial = new THREE.LineBasicMaterial({
 });
 attachLineShader(sharedAccentEdgeMaterial);
 
+export const sharedPointsMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uPointsDensity: plotterStyleUniforms.uPointsDensity,
+    uPointSize: plotterStyleUniforms.uPointSize,
+    uJitter: plotterStyleUniforms.uJitter,
+    uLensCurvature: plotterStyleUniforms.uLensCurvature,
+    uDepthTaper: plotterStyleUniforms.uDepthTaper,
+    uInkColor: plotterStyleUniforms.uInkColor,
+  },
+  vertexShader: /* glsl */ `
+    uniform float uPointsDensity;
+    uniform float uPointSize;
+    uniform float uJitter;
+    uniform float uLensCurvature;
+    attribute float aThreshold;
+    varying float vVisible;
+    varying float vPlotterViewDepth;
+
+    vec3 plotterHash3(vec3 p) {
+      p = vec3(
+        dot(p, vec3(127.1, 311.7, 74.7)),
+        dot(p, vec3(269.5, 183.3, 246.1)),
+        dot(p, vec3(113.5, 271.9, 124.6))
+      );
+      return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+    }
+
+    void main() {
+      if (aThreshold > uPointsDensity || uPointsDensity < 0.001) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 0.0);
+        gl_PointSize = 0.0;
+        vVisible = 0.0;
+        return;
+      }
+      vVisible = 1.0;
+      vec4 worldPos = modelMatrix * vec4(position, 1.0);
+      if (uJitter > 0.001) {
+        vec3 cell = floor(worldPos.xyz * 3.5 + 0.5);
+        vec3 n = plotterHash3(cell);
+        worldPos.xyz += n * (uJitter * 0.22);
+      }
+      vec4 mvPosition = viewMatrix * worldPos;
+      vPlotterViewDepth = -mvPosition.z;
+      gl_Position = projectionMatrix * mvPosition;
+      if (abs(uLensCurvature) > 0.001) {
+        vec2 ndc = gl_Position.xy / max(0.25, gl_Position.w);
+        float r2 = clamp(dot(ndc, ndc), 0.0, 2.5);
+        gl_Position.xy *= (1.0 - uLensCurvature * 0.24 * r2);
+      }
+      float depthAtten = clamp(48.0 / max(1.0, -mvPosition.z), 0.45, 2.0);
+      gl_PointSize = clamp(uPointSize * depthAtten, 1.5, 10.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform vec3 uInkColor;
+    uniform float uDepthTaper;
+    varying float vVisible;
+    varying float vPlotterViewDepth;
+
+    void main() {
+      if (vVisible < 0.5) discard;
+      vec2 coord = gl_PointCoord - vec2(0.5);
+      float distSq = dot(coord, coord);
+      if (distSq > 0.25) discard;
+      float alpha = smoothstep(0.25, 0.14, distSq);
+      if (uDepthTaper > 0.001) {
+        float distFactor = smoothstep(18.0, 210.0, vPlotterViewDepth);
+        alpha *= mix(1.0, 1.0 - distFactor * 0.82, uDepthTaper);
+      }
+      gl_FragColor = vec4(uInkColor, alpha * 0.95);
+    }
+  `,
+  transparent: true,
+  depthTest: true,
+  depthWrite: false,
+});
+
+/**
+ * Creates a THREE.Points cloud styled as plotter coordinate node stipples.
+ */
+export function createPlotterPoints(
+  geometry: THREE.BufferGeometry
+): THREE.Points {
+  const points = new THREE.Points(geometry, sharedPointsMaterial);
+  points.userData.isPlotterPoints = true;
+  points.userData.alwaysVisibleInSobel = true;
+  return points;
+}
+
 /**
  * Updates shared line weight and jitter uniforms/material properties.
  */
@@ -431,6 +522,15 @@ export function applyPlotterEffects(
     merged.lensCurvature / 100,
     -1,
     1
+  );
+  plotterStyleUniforms.uPointsDensity.value = THREE.MathUtils.clamp(
+    (merged.pointsDensity ?? 25) / 100,
+    0,
+    1
+  );
+  plotterStyleUniforms.uPointSize.value = Math.max(
+    2.0,
+    (merged.lineWeight ?? 1.2) * 2.2
   );
 
   const palette =
@@ -590,6 +690,8 @@ export function applyRenderModeToScene(
     } else if (obj.userData.isEdgeLine) {
       obj.visible =
         mode !== 'sobel-post' || Boolean(obj.userData.alwaysVisibleInSobel);
+    } else if (obj.userData.isPlotterPoints) {
+      obj.visible = true;
     }
   });
 }

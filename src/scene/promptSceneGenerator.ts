@@ -354,6 +354,7 @@ export function synthesizeSceneFromPromptOffline(promptText: string): SceneDescr
       windowDensity: wantsNoBuildings ? 0 : 80,
       balconyDensity: wantsNoBuildings ? 0 : buildingStyle === 'haussmann' ? 85 : 55,
       buildingDetail: wantsNoBuildings ? 0 : 80,
+      pointsDensity: 30,
     },
     recommendedCamera: {
       cameraHeight: camHeight,

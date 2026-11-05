@@ -127,9 +127,9 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
       })
       .on('change', notifyChange);
 
-    // Building Details Folder (Windows, Balconies, Architectural Ornaments)
+    // Object & Building Details Folder (Windows, Balconies, Architectural Ornaments, Points & Detail Density)
     const buildingFolder = pane.addFolder({
-      title: 'BUILDING DETAILS',
+      title: 'OBJECT & BUILDING DETAILS',
       expanded: true,
     });
 
@@ -154,6 +154,15 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
     buildingFolder
       .addBinding(state, 'buildingDetail', {
         label: 'Architecture %',
+        min: 0,
+        max: 100,
+        step: 1,
+      })
+      .on('change', notifyChange);
+
+    buildingFolder
+      .addBinding(state, 'pointsDensity', {
+        label: 'Object & points %',
         min: 0,
         max: 100,
         step: 1,
@@ -488,10 +497,10 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
             </dd>
           </div>
           <div>
-            <dt>FACADE DETAIL</dt>
+            <dt>FACADE & DETAIL</dt>
             <dd>
               WIN {params.windowDensity}% · BAL {params.balconyDensity}% · ARCH{' '}
-              {params.buildingDetail}%
+              {params.buildingDetail}% · PTS {params.pointsDensity}%
             </dd>
           </div>
           <div>

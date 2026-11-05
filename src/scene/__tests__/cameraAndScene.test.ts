@@ -21,6 +21,7 @@ import {
   applyBuildingDetailLevel,
   buildBuildingsScene,
 } from '../buildingBuilder';
+import { buildCityPointCloud } from '../pointsBuilder';
 import { buildVehiclesScene, updateVehicles } from '../vehicleBuilder';
 import {
   buildPedestriansScene,
@@ -281,6 +282,7 @@ describe('Plotter Scene & Asset Builders', () => {
       lensCurvature: -60,
       orthoBlend: 100,
       lookAhead: 95,
+      pointsDensity: 70,
     });
 
     expect(plotterStyleUniforms.uLineWeight.value).toBeCloseTo(1.8, 4);
@@ -296,6 +298,7 @@ describe('Plotter Scene & Asset Builders', () => {
     expect(plotterStyleUniforms.uFocalDistance.value).toBeCloseTo(95, 4);
     expect(plotterStyleUniforms.uPenMisregistration.value).toBeCloseTo(4.2, 4);
     expect(plotterStyleUniforms.uLensCurvature.value).toBeCloseTo(-0.6, 4);
+    expect(plotterStyleUniforms.uPointsDensity.value).toBeCloseTo(0.7, 4);
     expect(plotterStyleUniforms.uPaperColor.value.getHex()).toBe(
       PAPER_THEME_PALETTES.blueprint.paperBgHex
     );
@@ -322,6 +325,70 @@ describe('Plotter Scene & Asset Builders', () => {
 
     // Reset back to default
     applyPlotterEffects(DEFAULT_CAMERA_PARAMS);
+  });
+
+  it('generates 3D city point cloud and controls progressive object micro-details via pointsDensity', () => {
+    const road = buildRoadScene();
+    const buildings = buildBuildingsScene();
+    const vScene = buildVehiclesScene(0.7);
+
+    // Verify micro-details are tagged with pointsThreshold in road and vehicles
+    let roadPointsTagged = 0;
+    road.traverse((obj) => {
+      if (typeof obj.userData.pointsThreshold === 'number') {
+        roadPointsTagged++;
+      }
+    });
+    expect(roadPointsTagged).toBeGreaterThan(0);
+
+    let vehiclePointsTagged = 0;
+    vScene.group.traverse((obj) => {
+      if (typeof obj.userData.pointsThreshold === 'number') {
+        vehiclePointsTagged++;
+      }
+    });
+    expect(vehiclePointsTagged).toBeGreaterThan(0);
+
+    // Build the point cloud from the scene groups
+    const pointCloud = buildCityPointCloud({
+      road,
+      buildings,
+      vehicles: vScene.group,
+    });
+    expect(pointCloud).toBeInstanceOf(THREE.Points);
+    expect(pointCloud.geometry.attributes.position.count).toBeGreaterThan(500);
+    expect(pointCloud.geometry.attributes.aThreshold.count).toBe(
+      pointCloud.geometry.attributes.position.count
+    );
+
+    // Verify applyBuildingDetailLevel controls pointsThreshold visibility
+    applyBuildingDetailLevel(buildings, {
+      windowDensity: 100,
+      balconyDensity: 100,
+      buildingDetail: 100,
+      pointsDensity: 0,
+    });
+    let visiblePointsDetails = 0;
+    buildings.traverse((obj) => {
+      if (typeof obj.userData.pointsThreshold === 'number' && obj.visible) {
+        visiblePointsDetails++;
+      }
+    });
+    expect(visiblePointsDetails).toBe(0);
+
+    applyBuildingDetailLevel(buildings, {
+      windowDensity: 100,
+      balconyDensity: 100,
+      buildingDetail: 100,
+      pointsDensity: 100,
+    });
+    let visiblePointsDetails100 = 0;
+    buildings.traverse((obj) => {
+      if (typeof obj.userData.pointsThreshold === 'number' && obj.visible) {
+        visiblePointsDetails100++;
+      }
+    });
+    expect(visiblePointsDetails100).toBeGreaterThan(0);
   });
 
   it('evaluates transition easing curves, interpolates camera parameters, and builds 3D transition trajectory geometry', () => {

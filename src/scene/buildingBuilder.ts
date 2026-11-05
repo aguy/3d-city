@@ -17,6 +17,7 @@ export interface BuildingDetailParams {
   buildingDetail: number; // 0..100
   windowDensity: number; // 0..100
   balconyDensity: number; // 0..100
+  pointsDensity?: number; // 0..100
 }
 
 function tagWindowGroup(obj: THREE.Object3D, threshold: number): THREE.Object3D {
@@ -593,6 +594,30 @@ function addWindowsAndBalconies(
       }
     }
   });
+
+  // --- E. ARCHITECTURAL STRINGCOURSES & FACADE PANEL JOINTS (Points & Micro-detail) ---
+  const stringcourseLines: THREE.Vector3[] = [];
+  floors.forEach((yBot) => {
+    stringcourseLines.push(
+      new THREE.Vector3(sfX, yBot - 0.22, zCenter - halfZ),
+      new THREE.Vector3(sfX, yBot - 0.22, zCenter + halfZ)
+    );
+    for (const zDir of [-1, 1] as const) {
+      stringcourseLines.push(
+        new THREE.Vector3(sfX, yBot - 0.22, zCenter + zDir * halfZ),
+        new THREE.Vector3(
+          sfX - outwardDir * depthX * 0.9,
+          yBot - 0.22,
+          zCenter + zDir * halfZ
+        )
+      );
+    }
+  });
+  if (stringcourseLines.length > 0) {
+    const scSegs = createPlotterSegments(stringcourseLines, 'secondary');
+    scSegs.userData.pointsThreshold = 30;
+    building.add(scSegs);
+  }
 }
 
 function createBuildingFromSpec(
@@ -1033,6 +1058,10 @@ export function applyBuildingDetailLevel(
       obj.visible =
         params.buildingDetail > 0 &&
         obj.userData.detailThreshold <= params.buildingDetail;
+    } else if (typeof obj.userData.pointsThreshold === 'number') {
+      const pd =
+        typeof params.pointsDensity === 'number' ? params.pointsDensity : 25;
+      obj.visible = pd > 0 && obj.userData.pointsThreshold <= pd;
     }
   });
 }

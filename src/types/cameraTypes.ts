@@ -54,6 +54,8 @@ export interface CameraParameters {
   windowDensity: number;
   /** Balcony density % (3D projecting balconies, railings, balusters, brackets) */
   balconyDensity: number;
+  /** Object micro-details and 3D coordinate point cloud density % (0..100) */
+  pointsDensity: number;
   /** Plotter line width / stroke weight in px (0.4..5.0) */
   lineWeight: number;
   /** Plotter hand-drawn / mechanical line jitter % (0..100) */
@@ -119,6 +121,7 @@ export const DEFAULT_CAMERA_PARAMS: CameraParameters = {
   buildingDetail: 85,
   windowDensity: 85,
   balconyDensity: 75,
+  pointsDensity: 25,
   lineWeight: 1.2,
   lineJitter: 0,
   cornerOvershoot: 0,
