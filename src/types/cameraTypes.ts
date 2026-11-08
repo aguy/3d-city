@@ -58,6 +58,8 @@ export interface CameraParameters {
   pointsDensity: number;
   /** Plotter line width / stroke weight in px (0.4..5.0) */
   lineWeight: number;
+  /** Manual freehand pen drawing feel % (0..100) */
+  manualSketch: number;
   /** Plotter hand-drawn / mechanical line jitter % (0..100) */
   lineJitter: number;
   /** Architectural corner tick overshoot % (0..100) */
@@ -125,6 +127,7 @@ export const DEFAULT_CAMERA_PARAMS: CameraParameters = {
   balconyDensity: 75,
   pointsDensity: 25,
   lineWeight: 1.2,
+  manualSketch: 0,
   lineJitter: 0,
   cornerOvershoot: 0,
   inkPooling: 0,

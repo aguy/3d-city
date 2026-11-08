@@ -106,6 +106,7 @@ export const PAPER_THEME_PALETTES: Record<PaperTheme, PaperThemePalette> = {
 
 export const plotterStyleUniforms = {
   uJitter: { value: 0.0 },
+  uManualSketch: { value: 0.0 },
   uLineWeight: { value: 1.2 },
   uOvershoot: { value: 0.0 },
   uInkPooling: { value: 0.0 },
@@ -130,6 +131,7 @@ export const plotterStyleUniforms = {
 
 const VERTEX_PREAMBLE = /* glsl */ `
   uniform float uJitter;
+  uniform float uManualSketch;
   uniform float uLensCurvature;
   varying vec3 vPlotterWorldPos;
   varying float vPlotterViewDepth;
@@ -168,6 +170,7 @@ const VERTEX_PROJECT_REPLACEMENT = /* glsl */ `
 
 function bindCommonUniforms(shader: THREE.WebGLProgramParametersWithUniforms) {
   shader.uniforms.uJitter = plotterStyleUniforms.uJitter;
+  shader.uniforms.uManualSketch = plotterStyleUniforms.uManualSketch;
   shader.uniforms.uLensCurvature = plotterStyleUniforms.uLensCurvature;
   shader.uniforms.uHatchDensity = plotterStyleUniforms.uHatchDensity;
   shader.uniforms.uStippleShade = plotterStyleUniforms.uStippleShade;
@@ -270,25 +273,136 @@ function attachOccluderShader(material: THREE.Material): void {
 }
 
 /**
- * Attaches vertex jitter, curvilinear lens distortion, depth tapering, dry-pen dropout,
- * and vertex ink pooling to LineBasicMaterial instances.
+ * Enriches a LineSegments BufferGeometry with partner-endpoint coordinates (`aSegmentOther`)
+ * and segment metadata (`aSegmentMeta`: x = 0 at start / 1 at end, y = deterministic seed)
+ * so the vertex/fragment shaders can project straight 3D architectural corner overshoot lines
+ * that taper to a sharp point past each vertex and emphasize corner intersections.
+ */
+function enrichLineSegmentsGeometry(geo: THREE.BufferGeometry): void {
+  const posAttr = geo.getAttribute('position');
+  if (!posAttr || posAttr.count < 2) return;
+  const count = posAttr.count;
+  const otherPositions = new Float32Array(count * 3);
+  const segmentMeta = new Float32Array(count * 2);
+
+  for (let i = 0; i + 1 < count; i += 2) {
+    const x0 = posAttr.getX(i);
+    const y0 = posAttr.getY(i);
+    const z0 = posAttr.getZ(i);
+    const x1 = posAttr.getX(i + 1);
+    const y1 = posAttr.getY(i + 1);
+    const z1 = posAttr.getZ(i + 1);
+
+    otherPositions[i * 3] = x1;
+    otherPositions[i * 3 + 1] = y1;
+    otherPositions[i * 3 + 2] = z1;
+
+    otherPositions[(i + 1) * 3] = x0;
+    otherPositions[(i + 1) * 3 + 1] = y0;
+    otherPositions[(i + 1) * 3 + 2] = z0;
+
+    const mx = (x0 + x1) * 0.5;
+    const my = (y0 + y1) * 0.5;
+    const mz = (z0 + z1) * 0.5;
+    const rawHash =
+      Math.sin(mx * 12.9898 + my * 78.233 + mz * 37.719) * 43758.5453;
+    const seed = rawHash - Math.floor(rawHash);
+
+    segmentMeta[i * 2] = 0.0;
+    segmentMeta[i * 2 + 1] = seed;
+    segmentMeta[(i + 1) * 2] = 1.0;
+    segmentMeta[(i + 1) * 2 + 1] = seed;
+  }
+
+  geo.setAttribute(
+    'aSegmentOther',
+    new THREE.BufferAttribute(otherPositions, 3)
+  );
+  geo.setAttribute('aSegmentMeta', new THREE.BufferAttribute(segmentMeta, 2));
+}
+
+/**
+ * Attaches straight 3D architectural corner overshoot extensions, corner ink emphasis,
+ * mid-segment pressure tapering, vertex jitter, and curvilinear lens distortion to LineBasicMaterial instances.
  */
 function attachLineShader(material: THREE.Material): void {
   material.onBeforeCompile = (shader) => {
     bindCommonUniforms(shader);
-    shader.vertexShader = VERTEX_PREAMBLE + shader.vertexShader;
+    shader.vertexShader =
+      VERTEX_PREAMBLE +
+      /* glsl */ `
+      attribute vec3 aSegmentOther;
+      attribute vec2 aSegmentMeta;
+      varying float vLineParam;
+      varying float vOvershootRatio;
+      varying float vStrokeSeed;
+      ` +
+      shader.vertexShader;
+
     shader.vertexShader = shader.vertexShader.replace(
       '#include <project_vertex>',
-      VERTEX_PROJECT_REPLACEMENT
+      /* glsl */ `
+      vec3 localPos = transformed;
+      vLineParam = aSegmentMeta.x;
+      vOvershootRatio = 0.0;
+      vStrokeSeed = aSegmentMeta.y;
+
+      if (uManualSketch > 0.001) {
+        vec3 segVec = transformed - aSegmentOther;
+        float segLen = length(segVec);
+        if (segLen > 0.35) {
+          vec3 outDir = segVec / segLen;
+          float seedFactor = 0.45 + 0.85 * aSegmentMeta.y;
+          // Longer construction line extensions on primary vertical and long architectural edges
+          float baseExt = clamp(segLen * 0.24, 0.16, 2.8) * seedFactor;
+          if (abs(outDir.y) > 0.75 && segLen > 1.4) {
+            baseExt *= 1.45;
+          }
+          float extLen = baseExt * uManualSketch;
+          float ratio = extLen / segLen;
+          localPos += outDir * extLen;
+          vOvershootRatio = ratio;
+          vLineParam = (aSegmentMeta.x < 0.5) ? (-ratio) : (1.0 + ratio);
+        }
+      }
+
+      vec4 mvPosition = vec4( localPos, 1.0 );
+      #ifdef USE_INSTANCING
+        mvPosition = instanceMatrix * mvPosition;
+      #endif
+      vec4 worldPos = modelMatrix * mvPosition;
+      if (uJitter > 0.001) {
+        vec3 cell = floor(worldPos.xyz * 3.5 + 0.5);
+        vec3 n = plotterHash3(cell);
+        worldPos.xyz += n * (uJitter * 0.26);
+      }
+      mvPosition = viewMatrix * worldPos;
+      if (uManualSketch > 0.001) {
+        // Slight camera-ward depth bias so corner extensions and intersections stay crisp in front of coplanar faces
+        mvPosition.z += 0.12 * uManualSketch;
+      }
+      vPlotterWorldPos = worldPos.xyz;
+      vPlotterViewDepth = -mvPosition.z;
+      gl_Position = projectionMatrix * mvPosition;
+      if (abs(uLensCurvature) > 0.001) {
+        vec2 ndc = gl_Position.xy / max(0.25, gl_Position.w);
+        float r2 = clamp(dot(ndc, ndc), 0.0, 2.5);
+        gl_Position.xy *= (1.0 - uLensCurvature * 0.24 * r2);
+      }
+      `
     );
 
     shader.fragmentShader =
       /* glsl */ `
+      uniform float uManualSketch;
       uniform float uDepthTaper;
       uniform float uInkDropout;
       uniform float uInkPooling;
       varying vec3 vPlotterWorldPos;
       varying float vPlotterViewDepth;
+      varying float vLineParam;
+      varying float vOvershootRatio;
+      varying float vStrokeSeed;
 
       float plotterLineHash(vec2 p) {
         vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -301,6 +415,29 @@ function attachLineShader(material: THREE.Material): void {
       '#include <dithering_fragment>',
       /* glsl */ `
       #include <dithering_fragment>
+      if (uManualSketch > 0.001) {
+        if (vLineParam < 0.0 || vLineParam > 1.0) {
+          // Straight 3D architectural construction line shooting past the corner, tapering to a fine point
+          float overDist = (vLineParam < 0.0)
+            ? (-vLineParam / max(0.0001, vOvershootRatio))
+            : ((vLineParam - 1.0) / max(0.0001, vOvershootRatio));
+          if (overDist >= 1.0) discard;
+          float tailTaper = pow(clamp(1.0 - overDist, 0.0, 1.0), 1.85);
+          gl_FragColor.a *= tailTaper * (0.82 + 0.18 * uManualSketch);
+        } else {
+          // Firm, dark ink anchoring near corners (vLineParam near 0 or 1) and lighter fast-flick mid-span
+          float cornerDist = min(vLineParam, 1.0 - vLineParam);
+          float cornerAnchor = 1.0 - smoothstep(0.0, 0.16, cornerDist);
+          float midSpan = smoothstep(0.08, 0.26, cornerDist);
+          float sweepWave = 0.5 + 0.5 * sin(vLineParam * 6.28318 + vStrokeSeed * 6.28318);
+          float midFade = mix(1.0, 0.42 + 0.58 * sweepWave, midSpan * uManualSketch * 0.85);
+          // Occasional mid-line dry-pen lift on interior segments (while corners remain 100% solid)
+          if (midSpan > 0.48 && vStrokeSeed > 0.66 && sweepWave < 0.24 * uManualSketch) {
+            midFade *= 0.14;
+          }
+          gl_FragColor.a = clamp(gl_FragColor.a * midFade + cornerAnchor * 0.35 * uManualSketch, 0.0, 1.0);
+        }
+      }
       if (uInkDropout > 0.001) {
         vec2 noiseCell = floor(gl_FragCoord.xy * 0.65 + vPlotterWorldPos.xz * 2.0);
         float n = plotterLineHash(noiseCell);
@@ -513,6 +650,11 @@ export function applyPlotterEffects(
   const merged = { ...DEFAULT_CAMERA_PARAMS, ...params };
   applyPlotterLineStyle(merged.lineWeight, merged.lineJitter);
 
+  plotterStyleUniforms.uManualSketch.value = THREE.MathUtils.clamp(
+    (merged.manualSketch ?? 0) / 100,
+    0,
+    1
+  );
   plotterStyleUniforms.uOvershoot.value = THREE.MathUtils.clamp(
     merged.cornerOvershoot / 100,
     0,
@@ -637,6 +779,7 @@ export function createPlotterMesh(
 
   // Wireframe outline via EdgesGeometry + LineSegments
   const edgesGeometry = new THREE.EdgesGeometry(geometry, thresholdAngle);
+  enrichLineSegmentsGeometry(edgesGeometry);
   const lineMat =
     inkWeight === 'secondary'
       ? sharedSecondaryEdgeMaterial
@@ -660,6 +803,7 @@ export function createPlotterSegments(
   inkWeight: 'primary' | 'secondary' = 'primary'
 ): THREE.LineSegments {
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  enrichLineSegmentsGeometry(geometry);
   const material =
     inkWeight === 'secondary'
       ? sharedSecondaryEdgeMaterial

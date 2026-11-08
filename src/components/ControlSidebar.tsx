@@ -196,6 +196,15 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
       .on('change', notifyChange);
 
     penFolder
+      .addBinding(state, 'manualSketch', {
+        label: 'Manual draw %',
+        min: 0,
+        max: 100,
+        step: 1,
+      })
+      .on('change', notifyChange);
+
+    penFolder
       .addBinding(state, 'lineJitter', {
         label: 'Line jitter %',
         min: 0,
@@ -426,6 +435,7 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
         showTargetMarker: state.showTargetMarker,
         distantGradient: state.distantGradient,
         lineWeight: state.lineWeight,
+        manualSketch: state.manualSketch,
         lineJitter: state.lineJitter,
       });
       isExternalSyncRef.current = true;

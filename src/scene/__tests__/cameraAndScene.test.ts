@@ -271,6 +271,7 @@ describe('Plotter Scene & Asset Builders', () => {
     applyPlotterEffects({
       ...DEFAULT_CAMERA_PARAMS,
       lineWeight: 1.8,
+      manualSketch: 65,
       lineJitter: 40,
       cornerOvershoot: 75,
       inkPooling: 50,
@@ -290,6 +291,7 @@ describe('Plotter Scene & Asset Builders', () => {
     });
 
     expect(plotterStyleUniforms.uLineWeight.value).toBeCloseTo(1.8, 4);
+    expect(plotterStyleUniforms.uManualSketch.value).toBeCloseTo(0.65, 4);
     expect(plotterStyleUniforms.uJitter.value).toBeCloseTo(0.4, 4);
     expect(plotterStyleUniforms.uOvershoot.value).toBeCloseTo(0.75, 4);
     expect(plotterStyleUniforms.uInkPooling.value).toBeCloseTo(0.5, 4);

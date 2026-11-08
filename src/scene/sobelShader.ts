@@ -17,6 +17,7 @@ export const PlotterSobelShader = {
     resolution: { value: new THREE.Vector2(1024, 768) },
     uMode: { value: 0.0 },
     uLineWeight: { value: 1.2 },
+    uManualSketch: { value: 0.0 },
     uJitter: { value: 0.0 },
     uOvershoot: { value: 0.0 },
     uInkPooling: { value: 0.0 },
@@ -47,6 +48,7 @@ export const PlotterSobelShader = {
     uniform vec2 resolution;
     uniform float uMode;
     uniform float uLineWeight;
+    uniform float uManualSketch;
     uniform float uJitter;
     uniform float uOvershoot;
     uniform float uInkPooling;
@@ -72,10 +74,21 @@ export const PlotterSobelShader = {
       return fract((p3.x + p3.y) * p3.z);
     }
 
+    float manualNoise2(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      float a = hash12(i);
+      float b = hash12(i + vec2(1.0, 0.0));
+      float c = hash12(i + vec2(0.0, 1.0));
+      float d = hash12(i + vec2(1.0, 1.0));
+      return -1.0 + 2.0 * mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+    }
+
     // Theme-independent ink extraction (works for both dark-on-light and light-on-dark themes,
-    // and ignores distant background gradient tints on occluder surfaces)
+    // preserves smooth tapered construction line opacity, and ignores distant background gradient tints)
     float extractInk(vec4 c) {
-      if (c.a < 0.03) return 0.0;
+      if (c.a < 0.01) return 0.0;
       float dPaper = length(c.rgb - uPaperColor);
       if (uDistantGradient > 0.5) {
         vec3 gMid = mix(uGradientHorizonColor, uGradientZenithColor, 0.5);
@@ -85,8 +98,8 @@ export const PlotterSobelShader = {
         dPaper = min(dPaper, length(c.rgb - mix(uPaperColor, gMid, 0.5)));
       }
       float dInk = length(c.rgb - uInkColor);
-      float ratio = clamp(dPaper / max(0.05, dPaper + dInk), 0.0, 1.0);
-      return c.a * smoothstep(0.12, 0.58, ratio);
+      float ratio = clamp(dPaper / max(0.02, dPaper + dInk), 0.0, 1.0);
+      return c.a * smoothstep(0.02, 0.90, ratio);
     }
 
     // Evaluates Sobel edge intensity at a given UV coordinate (used in uMode = 1.0)
@@ -129,10 +142,12 @@ export const PlotterSobelShader = {
     void main() {
       vec2 texel = vec2(1.0 / max(1.0, resolution.x), 1.0 / max(1.0, resolution.y));
 
-      // 1. Hand-drawn / mechanical wave jitter along strokes
+      // 1. Mechanical wave jitter along strokes (only when Line jitter % is explicitly set;
+      // Manual draw % keeps lines 100% ruler-straight like an architectural concept sketch)
       vec2 uv = vUv;
+      float aspect = resolution.x / max(1.0, resolution.y);
+
       if (uJitter > 0.001) {
-        float aspect = resolution.x / max(1.0, resolution.y);
         vec2 p = vec2(uv.x * aspect, uv.y);
 
         float w1x = sin(p.y * 58.0 + p.x * 21.0) + 0.5 * cos(p.y * 155.0 - p.x * 92.0);
@@ -144,7 +159,7 @@ export const PlotterSobelShader = {
         uv = clamp(uv + disp, vec2(0.001), vec2(0.999));
       }
 
-      // 2. Depth Taper factor (perspective horizon sits near upper-middle of viewport)
+      // 2. Depth Taper factor
       float horizonProximity = smoothstep(0.15, 0.82, uv.y);
       float effectiveWeight = uLineWeight * mix(1.0, max(0.38, 1.0 - horizonProximity * 0.72), uDepthTaper);
 
@@ -162,6 +177,65 @@ export const PlotterSobelShader = {
         }
       } else if (uMode < 0.5 && effectiveWeight < 0.98) {
         strokeInk *= clamp(effectiveWeight, 0.35, 1.0);
+      }
+
+      // 3b. Architectural Concept Sketch Mode (Manual draw %):
+      // - Crisp straight lines with tight parallel double-stroking along edges
+      // - Long, needle-thin tapered construction overshoot extensions past corners
+      // - Heavy, dark ink emphasis at corner intersections & lighter mid-strokes
+      if (uManualSketch > 0.001) {
+        // Tight parallel straight double-stroke restroke (1.4px offset)
+        vec2 parallelOff1 = vec2(1.4, -0.85) * texel;
+        vec2 parallelOff2 = vec2(-1.15, 0.7) * texel;
+        float restrokeMask1 = clamp(0.45 + 0.55 * sin(uv.y * 85.0 + uv.x * 45.0), 0.0, 1.0);
+        float restrokeMask2 = clamp(0.4 + 0.6 * cos(uv.x * 75.0 - uv.y * 55.0), 0.0, 1.0);
+        float parallel1 = sampleStrokeAt(uv + parallelOff1, texel, 0.9) * restrokeMask1 * 0.62 * uManualSketch;
+        float parallel2 = sampleStrokeAt(uv + parallelOff2, texel, 0.85) * restrokeMask2 * 0.44 * uManualSketch;
+        strokeInk = max(strokeInk, max(parallel1, parallel2));
+
+        // Long, tapered straight construction extensions shooting past corners along vertical & horizontal axes
+        float maxReachPx = 6.0 + 18.0 * uManualSketch;
+        float rayTail = 0.0;
+        for (int s = 1; s <= 4; s++) {
+          float frac = float(s) * 0.25;
+          float d1 = frac * maxReachPx;
+          float d2 = d1 + 2.5;
+          float fade = pow(1.0 - frac * 0.88, 2.1);
+
+          // Vertical construction extension (collinear pair check ensures only true vertical segments extend)
+          float vUp = min(
+            sampleStrokeAt(uv + vec2(0.0, texel.y * d1), texel, 1.0),
+            sampleStrokeAt(uv + vec2(0.0, texel.y * d2), texel, 1.0)
+          );
+          float vDown = min(
+            sampleStrokeAt(uv - vec2(0.0, texel.y * d1), texel, 1.0),
+            sampleStrokeAt(uv - vec2(0.0, texel.y * d2), texel, 1.0)
+          );
+          // Horizontal construction extension
+          float hRight = min(
+            sampleStrokeAt(uv + vec2(texel.x * d1, 0.0), texel, 1.0),
+            sampleStrokeAt(uv + vec2(texel.x * d2, 0.0), texel, 1.0)
+          );
+          float hLeft = min(
+            sampleStrokeAt(uv - vec2(texel.x * d1, 0.0), texel, 1.0),
+            sampleStrokeAt(uv - vec2(texel.x * d2, 0.0), texel, 1.0)
+          );
+          rayTail = max(rayTail, max(max(vUp, vDown), max(hRight, hLeft)) * fade);
+        }
+        strokeInk = max(strokeInk, rayTail * 0.78 * uManualSketch);
+
+        // Dark, emphatic ink anchoring right at corner intersections where vertical & horizontal/angled lines cross
+        float cSpan = 1.8;
+        float hCross = max(
+          sampleStrokeAt(uv + vec2(texel.x * cSpan, 0.0), texel, 1.0),
+          sampleStrokeAt(uv - vec2(texel.x * cSpan, 0.0), texel, 1.0)
+        );
+        float vCross = max(
+          sampleStrokeAt(uv + vec2(0.0, texel.y * cSpan), texel, 1.0),
+          sampleStrokeAt(uv - vec2(0.0, texel.y * cSpan), texel, 1.0)
+        );
+        float cornerDarken = sqrt(hCross * vCross) * uManualSketch * 1.15;
+        strokeInk = clamp(strokeInk + cornerDarken * 0.65, 0.0, 1.0);
       }
 
       // 4. Multi-Pass Fineliner Sketch (1..4 overlapping ghosted passes)
@@ -359,6 +433,11 @@ export function createSobelPipeline(
       lineWeight,
       0.4,
       5.0
+    );
+    sobelPass.uniforms.uManualSketch.value = THREE.MathUtils.clamp(
+      (merged.manualSketch ?? 0) / 100,
+      0.0,
+      1.0
     );
     sobelPass.uniforms.uJitter.value = THREE.MathUtils.clamp(
       lineJitterPercent / 100,

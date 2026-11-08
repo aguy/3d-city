@@ -359,6 +359,7 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       const needsPostPass =
         currentParams.renderMode === 'sobel-post' ||
         Math.abs(currentParams.lineWeight - 1.0) > 0.02 ||
+        currentParams.manualSketch > 0 ||
         currentParams.lineJitter > 0 ||
         currentParams.cornerOvershoot > 0 ||
         currentParams.inkPooling > 0 ||
@@ -406,8 +407,8 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
 
       <div className="viewport-hud-top-left">
         <span className="hud-tag">
-          PEN: {params.lineWeight.toFixed(1)}PX · JITTER: {params.lineJitter}% ·{' '}
-          PASSES: {params.sketchPasses}×
+          PEN: {params.lineWeight.toFixed(1)}PX · MANUAL: {params.manualSketch}%
+          {' · '}JITTER: {params.lineJitter}% · PASSES: {params.sketchPasses}×
         </span>
         <span className="hud-tag">
           PAPER: {params.paperTheme.toUpperCase()} · HATCH:{' '}
