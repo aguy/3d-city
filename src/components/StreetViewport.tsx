@@ -82,6 +82,7 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
   onUpdateTransitionSettings = () => {},
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const printImageRef = useRef<HTMLImageElement | null>(null);
   const paramsRef = useRef<CameraParameters>(params);
   paramsRef.current = params;
 
@@ -120,10 +121,11 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       650
     );
 
-    // 3. WebGLRenderer with alpha: true so the CSS graph paper background shows through
+    // 3. WebGLRenderer with alpha: true and preserveDrawingBuffer: true for crisp printing
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
+      preserveDrawingBuffer: true,
       powerPreference: 'high-performance',
     });
     renderer.setClearColor(0x000000, 0);
@@ -214,6 +216,115 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
     // 7. Main animation loop binding slider state to the 3D camera, building details & transition trajectory
     let animationFrameId = 0;
     let prevTime = performance.now();
+
+    const renderCurrentFrame = () => {
+      const currentParams = paramsRef.current;
+      const needsPostPass =
+        currentParams.renderMode === 'sobel-post' ||
+        Math.abs(currentParams.lineWeight - 1.0) > 0.02 ||
+        currentParams.manualSketch > 0 ||
+        currentParams.lineJitter > 0 ||
+        currentParams.cornerOvershoot > 0 ||
+        currentParams.inkPooling > 0 ||
+        currentParams.inkDropout > 0 ||
+        currentParams.sketchPasses > 1 ||
+        currentParams.dofBlur > 0 ||
+        currentParams.penMisregistration > 0 ||
+        currentParams.depthTaper > 0;
+
+      if (needsPostPass) {
+        sobelPipeline.composer.render();
+      } else {
+        renderer.render(scene, camera);
+      }
+    };
+
+    const preparePrintSnapshot = () => {
+      renderCurrentFrame();
+      const glCanvas = renderer.domElement;
+      const printImg = printImageRef.current;
+      if (!glCanvas || !printImg || glCanvas.width === 0 || glCanvas.height === 0) {
+        return;
+      }
+
+      const currentParams = paramsRef.current;
+      const activePalette =
+        PAPER_THEME_PALETTES[currentParams.paperTheme] ??
+        PAPER_THEME_PALETTES.cream;
+
+      const offscreen = document.createElement('canvas');
+      offscreen.width = glCanvas.width;
+      offscreen.height = glCanvas.height;
+      const ctx = offscreen.getContext('2d');
+      if (!ctx) return;
+
+      const w = offscreen.width;
+      const h = offscreen.height;
+      const pr = renderer.getPixelRatio();
+
+      // 1. Paint paper background or distant atmospheric gradient
+      if (currentParams.distantGradient) {
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        const zenithHex = `#${activePalette.gradientZenithHex.toString(16).padStart(6, '0')}`;
+        const horizonHex = `#${activePalette.gradientHorizonHex.toString(16).padStart(6, '0')}`;
+        grad.addColorStop(0, zenithHex);
+        grad.addColorStop(0.46, horizonHex);
+        grad.addColorStop(0.9, activePalette.cssPaperBg);
+        grad.addColorStop(1, activePalette.cssPaperBg);
+        ctx.fillStyle = grad;
+      } else {
+        ctx.fillStyle = activePalette.cssPaperBg;
+      }
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Paint minor (12px) and major (60px) graph paper grid lines
+      const minorStep = 12 * pr;
+      const majorStep = 60 * pr;
+      ctx.lineWidth = Math.max(1, pr * 0.75);
+
+      ctx.strokeStyle = activePalette.cssGridMinor;
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += minorStep) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+      }
+      for (let y = 0; y <= h; y += minorStep) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = activePalette.cssGridMajor;
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += majorStep) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+      }
+      for (let y = 0; y <= h; y += majorStep) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+      }
+      ctx.stroke();
+
+      // 3. Composite the rendered WebGL plotter canvas on top
+      ctx.drawImage(glCanvas, 0, 0);
+
+      try {
+        printImg.src = offscreen.toDataURL('image/png');
+      } catch {
+        // Ignore security/taint errors in headless test environments
+      }
+    };
+
+    const handleTriggerPrint = () => {
+      preparePrintSnapshot();
+      setTimeout(() => {
+        window.print();
+      }, 40);
+    };
+
+    window.addEventListener('beforeprint', preparePrintSnapshot);
+    window.addEventListener('plotter:print', handleTriggerPrint);
 
     const animate = (now: number) => {
       animationFrameId = requestAnimationFrame(animate);
@@ -354,32 +465,15 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
         updatePedestrians(animatedPedestrians, dt);
       }
 
-      // Render through the post-processing pipeline when Sobel mode is active,
-      // or when any screen-space pen, ink, multi-pass, DOF, or 2-pen effect is enabled
-      const needsPostPass =
-        currentParams.renderMode === 'sobel-post' ||
-        Math.abs(currentParams.lineWeight - 1.0) > 0.02 ||
-        currentParams.manualSketch > 0 ||
-        currentParams.lineJitter > 0 ||
-        currentParams.cornerOvershoot > 0 ||
-        currentParams.inkPooling > 0 ||
-        currentParams.inkDropout > 0 ||
-        currentParams.sketchPasses > 1 ||
-        currentParams.dofBlur > 0 ||
-        currentParams.penMisregistration > 0 ||
-        currentParams.depthTaper > 0;
-
-      if (needsPostPass) {
-        sobelPipeline.composer.render();
-      } else {
-        renderer.render(scene, camera);
-      }
+      renderCurrentFrame();
     };
 
     animationFrameId = requestAnimationFrame(animate);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('beforeprint', preparePrintSnapshot);
+      window.removeEventListener('plotter:print', handleTriggerPrint);
       resizeObserver.disconnect();
       renderer.dispose();
     };
@@ -404,6 +498,12 @@ export const StreetViewport: React.FC<StreetViewportProps> = ({
       <ScenePromptBar onGenerate={onGenerateScene} />
 
       <div className="viewport-canvas-container" ref={containerRef} />
+
+      <img
+        ref={printImageRef}
+        className="print-snapshot-img"
+        alt="Plotter Drawing Print View"
+      />
 
       <div className="viewport-hud-top-left">
         <span className="hud-tag">

@@ -424,6 +424,13 @@ export const ControlSidebar: React.FC<ControlSidebarProps> = ({
       onPlayTransitionRef.current?.();
     });
 
+    const printBtn = pane.addButton({
+      title: '🖨 Print Plotter Drawing',
+    });
+    printBtn.on('click', () => {
+      window.dispatchEvent(new CustomEvent('plotter:print'));
+    });
+
     const resetBtn = pane.addButton({
       title: 'Reset to Default View',
     });

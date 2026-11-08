@@ -534,7 +534,8 @@ body,
 }
 
 .prompt-generate-btn,
-.prompt-random-btn {
+.prompt-random-btn,
+.prompt-print-btn {
   appearance: none;
   background: var(--ink-black);
   color: var(--paper-bg);
@@ -546,13 +547,19 @@ body,
   padding: 6px 12px;
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.1s ease;
+  transition: opacity 0.1s ease, background-color 0.1s ease, color 0.1s ease;
 }
 
-.prompt-random-btn {
+.prompt-random-btn,
+.prompt-print-btn {
   background: var(--paper-bg);
   color: var(--ink-black);
   border-color: var(--border-ink);
+}
+
+.prompt-print-btn:hover {
+  background: var(--ink-black);
+  color: var(--paper-bg);
 }
 
 .prompt-generate-btn:hover,
@@ -561,9 +568,60 @@ body,
 }
 
 .prompt-generate-btn:disabled,
-.prompt-random-btn:disabled {
+.prompt-random-btn:disabled,
+.prompt-print-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Hidden on screen; displayed full-page when printing */
+.print-snapshot-img {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 6mm;
+  }
+
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .left-panel,
+  .scene-prompt-container,
+  .transition-hud-panel,
+  .viewport-hud-top-left,
+  .viewport-hud-bottom-right,
+  .viewport-canvas-container {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  .app-layout,
+  .right-panel {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: none !important;
+  }
+
+  .print-snapshot-img {
+    display: block !important;
+    width: 100% !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    object-fit: contain !important;
+    border: 1.5px solid var(--border-ink);
+  }
 }
 
 .prompt-suggestions-row {

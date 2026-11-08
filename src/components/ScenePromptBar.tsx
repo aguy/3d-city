@@ -114,6 +114,15 @@ export const ScenePromptBar: React.FC<ScenePromptBarProps> = ({
         >
           🎲 SURPRISE ME
         </button>
+
+        <button
+          type="button"
+          className="prompt-print-btn"
+          onClick={() => window.dispatchEvent(new CustomEvent('plotter:print'))}
+          title="Print the current 3D plotter drawing"
+        >
+          🖨 PRINT
+        </button>
       </div>
 
       <div className="prompt-suggestions-row" aria-label="Preset prompt suggestions">
