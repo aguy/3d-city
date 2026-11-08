@@ -4,8 +4,7 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output (dist/ is tracked so GitHub Pages can serve directly from main branch)
 dist-ssr/
 *.tsbuildinfo
 
